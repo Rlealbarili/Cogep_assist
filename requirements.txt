@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+# --- Banco de Dados ---
+sqlalchemy
+asyncpg
+# --- Filas e Workers ---
+celery
+redis
+# --- APIs Externas ---
+httpx
+openai
+# --- NLP/Tokenização ---
+tiktoken

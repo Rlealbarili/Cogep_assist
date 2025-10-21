@@ -1,0 +1,145 @@
+{
+  "name": "ingest_manual_text",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "47225c2b-9f45-4eb7-9e30-cebb9f018d2b",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n    \"model\": \"text-embedding-3-small\",\n    \"input\": \"{{ $json.content }}\"\n}",
+        "options": {}
+      },
+      "id": "5a701831-7bc7-4775-8e89-c70f828a11de",
+      "name": "Generate Embedding (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "UTCd21TZuULlFf5G",
+          "name": "openai_header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ai.rag_documents_1536\n(namespace, source_uri, content, embedding)\nVALUES\n(\n  '{{ $node[\"Set\"].json.namespace }}',\n  '{{ $node[\"Set\"].json.source_uri }}',\n  '{{ $node[\"Set\"].json.content.replace(\"'\", \"''\") }}',\n  '{{ JSON.stringify($node[\"Generate Embedding (OpenAI)\"].json.data[0].embedding) }}'::vector(1536)\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        660,
+        0
+      ],
+      "id": "a13c7de6-337d-4004-aa5f-2a58ae66f923",
+      "name": "Insert Document",
+      "credentials": {
+        "postgres": {
+          "id": "zVZz7PCZmEg84Ghr",
+          "name": "AI Postgres (rag_writer)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "281cd10a-8414-43ee-ac58-e9e4f92a0f02",
+              "name": "content",
+              "value": "O horário de atendimento da COGEP é de segunda a sexta-feira, das 8h às 18h.",
+              "type": "string"
+            },
+            {
+              "id": "8f64a413-9193-4ec7-8cd5-d103a9eb079f",
+              "name": "namespace",
+              "value": "default",
+              "type": "string"
+            },
+            {
+              "id": "5b041011-d1ee-49ad-9d0e-3ca6d544bc93",
+              "name": "source_uri",
+              "value": "manual/faq/horario-atendimento",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "id": "9d5c23da-d226-44f4-aaad-8755b031f01d",
+      "name": "Set"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Embedding (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Insert Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set": {
+      "main": [
+        [
+          {
+            "node": "Generate Embedding (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b0bf9b2d-7156-4084-882a-7614295d9ebb",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "664a890e0a1e5e19c91e4f009efaa571635b76e9f57ce5b1556553e3cfe3c9b5"
+  },
+  "id": "hVtyzfSHTImjJ7UL",
+  "tags": []
+}

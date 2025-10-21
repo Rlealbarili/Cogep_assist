@@ -1,0 +1,423 @@
+{
+  "name": "ingest_one_document",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "namespace"
+            },
+            {
+              "name": "source",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -368,
+        -96
+      ],
+      "id": "1a6f89a0-7757-4353-8b23-2bf04f1b723c",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1a07eb3b-6062-4e38-a968-7c9a5f278675",
+              "name": "namespace",
+              "value": "cogep/public",
+              "type": "string"
+            },
+            {
+              "id": "4892ed9d-91dd-4fb9-8fa7-ff4c71f42203",
+              "name": "source",
+              "value": "{   \"type\": \"url\",   \"uri\": \"https://www.n8n.io/\",   \"meta\": {     \"category\": \"website\"   } }",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -144,
+        -96
+      ],
+      "id": "e3874ef6-3b6b-4e92-b785-344343af3189",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "const src = $json.source || {};\nif (!src.uri) { throw new Error('Missing source.uri'); }\nreturn [{ \n  json: {\n    namespace: $json.namespace || 'default',\n    source_uri: src.uri.trim(),\n    source_type: (src.type || 'url').toLowerCase(),\n    meta: src.meta || {}\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        -96
+      ],
+      "id": "0da95943-221e-4b15-afa0-8e13c7afa6df",
+      "name": "normalize_input"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.source_type }}",
+                    "rightValue": "url",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "d27efe12-b75d-46e7-b3bd-78db370006ac"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        224,
+        -96
+      ],
+      "id": "1e2dfb5b-b540-4f81-a7cf-8d008695afde",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.source_uri }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        -96
+      ],
+      "id": "e302d7be-b96d-4813-9dd4-d2400778a9e0",
+      "name": "Fetch URL Content"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://unstructured-api:8000/general/v0/general",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "files",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        -416
+      ],
+      "id": "c17d7109-ca0f-47ba-b4f1-5e5da5af8c5a",
+      "name": "Parse with Unstructured"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = items;\nconst blocks = [];\n\nfor (const item of allItems) {\n  const element = item.json;\n  if (!element || !element.text || element.text.trim() === '') continue;\n  blocks.push(element.text.replace(/\\s+\\n/g, '\\n').trim());\n}\n\nconst content = blocks.join('\\n\\n').trim();\n\n// Pega os dados originais (namespace, source_uri) do início do fluxo\nconst originalData = $('normalize_input').item.json;\n\n// Retorna um único item com TUDO combinado\nreturn [{\n  json: {\n    ...originalData,      // Adiciona namespace, source_uri, etc.\n    ...items[0].json,   // Adiciona metadados do parsing\n    content: content\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        -416
+      ],
+      "id": "b32426dd-1de7-4066-823e-0a7f20619065",
+      "name": "consolidate_text",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $json.meta || {};\nmeta.ingested_at = new Date().toISOString();\nmeta.bytes = $json.content?.length || 0;\nmeta.lang = meta.lang || 'auto';\nreturn [{ json: { ...$json, meta } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        -416
+      ],
+      "id": "218f474d-7007-45d2-b234-60b6aa66cef1",
+      "name": "compute_metadata"
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.content || '';\nconst max = 900;\nconst overlap = 150;\nconst allChunks = [];\nlet i = 0;\nlet p = 0;\n\n// Lógica de chunking corrigida (sem loop infinito)\nwhile (p < text.length) {\n  const end = p + max;\n  const slice = text.slice(p, end);\n  // O 'content' aqui é o pequeno chunk\n  allChunks.push({ chunk_idx: i++, content: slice });\n\n  if (end >= text.length) {\n    break; \n  }\n\n  p += (max - overlap);\n}\n\n// Remove o campo de conteúdo gigante para economizar memória\nconst baseJson = { ...$json };\ndelete baseJson.content; \n\n// Retorna uma lista SIMPLES de todos os itens, como o n8n espera.\nreturn allChunks.map(c => ({ json: { ...baseJson, ...c }}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        -704
+      ],
+      "id": "eefd11d9-d5cd-46fe-9205-1922cd5771f6",
+      "name": "chunk_and_label"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "text-embedding-3-small"
+            },
+            {
+              "name": "input",
+              "value": "={{ $json.content }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        -400
+      ],
+      "id": "dc647200-91a9-493b-8033-85e51a2c7b5b",
+      "name": "Generate Chunk Embedding",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "j9HqbwybKpZFMsRd",
+          "name": "OpenAI API Header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2256,
+        -528
+      ],
+      "id": "98591425-6a85-4f15-973d-e4e3e42b4644",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// CÓDIGO FINAL E CORRIGIDO\nconst { Client } = require('pg');\n\n// Suas credenciais do banco de dados na VPS\nconst dbConfig = {\n  host: '31.97.20.169',\n  port: 55432,\n  user: 'rag_writer',\n  password: 'rAG-!9ZV3uE7@kP2#qM6fD1_Ly',\n  database: 'ai_agents'\n};\n\nconst successfulItems = [];\n\nfor (const item of items) {\n  const client = new Client(dbConfig);\n  try {\n    await client.connect();\n\n    const json = item.json;\n\n    const query = `\n      INSERT INTO ai.rag_documents_1536\n      (namespace, source_uri, chunk_idx, content, metadata, embedding, content_sha256)\n      VALUES\n      ($1, $2, $3, $4, $5::jsonb, $6::vector(1536), $7)\n      ON CONFLICT (namespace, content_sha256)\n      DO UPDATE SET\n        source_uri = EXCLUDED.source_uri,\n        content = EXCLUDED.content,\n        metadata = ai.rag_documents_1536.metadata || EXCLUDED.metadata;\n    `;\n\n    // **PARÂMETROS FINAIS E CORRIGIDOS**\n    // Usando os caminhos \"planos\" que descobrimos\n    const params = [\n      json.namespace,\n      json.source_uri,\n      json.chunk_idx,\n      json.content,\n      JSON.stringify(json.meta || {}),\n      JSON.stringify(json.data[0].embedding),\n      json.content_sha256\n    ];\n\n    await client.query(query, params);\n    successfulItems.push(item);\n\n  } catch (error) {\n    const detailedError = new Error(`Falha ao processar chunk: ${error.message}`);\n    detailedError.stack = error.stack;\n    detailedError.itemData = item.json;\n    throw detailedError;\n  } finally {\n    await client.end();\n  }\n}\n\nreturn successfulItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        -528
+      ],
+      "id": "818723fc-2d85-424e-b046-67c35866dddd",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\n// Array para armazenar os resultados processados\nconst processedItems = [];\n\n// Loop através de cada item (chunk) que entra no nó\nfor (const item of items) {\n  // Pega o conteúdo de texto do chunk atual\n  const content = item.json.content;\n\n  // Verifica se o conteúdo existe para evitar erros com chunks vazios\n  if (content) {\n    // Calcula o hash SHA256 do conteúdo específico deste chunk\n    const hash = crypto.createHash('sha256').update(content, 'utf8').digest('hex');\n\n    // Adiciona o hash calculado de volta ao objeto json do item em um novo campo\n    item.json.content_sha256 = hash;\n  }\n\n  // Adiciona o item modificado (agora com o hash) à lista de resultados\n  processedItems.push(item);\n}\n\n// Retorna a lista completa de itens, onde cada um agora possui seu próprio hash\nreturn processedItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -704
+      ],
+      "id": "0b3ba0be-bf0c-4a58-8035-de045ffb5bed",
+      "name": "compute_chunk_hash"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "normalize_input": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "normalize_input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Fetch URL Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch URL Content": {
+      "main": [
+        [
+          {
+            "node": "Parse with Unstructured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse with Unstructured": {
+      "main": [
+        [
+          {
+            "node": "consolidate_text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "consolidate_text": {
+      "main": [
+        [
+          {
+            "node": "compute_metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "compute_metadata": {
+      "main": [
+        [
+          {
+            "node": "chunk_and_label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "chunk_and_label": {
+      "main": [
+        [
+          {
+            "node": "Generate Chunk Embedding",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "compute_chunk_hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Chunk Embedding": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "compute_chunk_hash": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b976e9f6-0cc0-4162-accf-af2da8557e32",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8beb6412d571027a9b30d1cf4bf4cbc481568cb5b8e73666973b386f6afd347a"
+  },
+  "id": "79J4BogO3j0SCSjn",
+  "tags": []
+}

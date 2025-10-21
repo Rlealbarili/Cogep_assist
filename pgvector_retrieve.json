@@ -1,0 +1,180 @@
+{
+  "name": "pgvector_retrieve",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "9cceedaf-b350-4e03-8b54-dc09e8f13b1d",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  id,\n  source_uri,\n  content,\n  1 - (embedding <=> ('{{$json.vector_literal}}')::vector(1536)) AS score\nFROM ai.rag_documents_1536\nWHERE namespace = {{\n  ($json.namespace && $json.namespace !== 'undefined' && $json.namespace !== 'null' && $json.namespace !== '')\n    ? `'${$json.namespace}'`\n    : `'default'`\n}}\nORDER BY embedding <=> ('{{$json.vector_literal}}')::vector(1536)\nLIMIT {{$json.topK || 5}};\n",
+        "options": {}
+      },
+      "id": "fc790d44-4ccd-45a7-af4e-bfa9b262d5e3",
+      "name": "Postgres • knn_query",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        620,
+        20
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "credentials": {
+        "postgres": {
+          "id": "S8SDjTdZgJfZRgP7",
+          "name": "AI Postgres (agent_app)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function sane(v, dflt) {\n  if (v === undefined || v === null) return dflt;\n  if (typeof v === 'string' && (v.trim() === '' || v === 'undefined' || v === 'null')) return dflt;\n  return v;\n}\n\nreturn [{\n  json: {\n    question: sane($json.question, ''),\n    namespace: sane($json.namespace, 'default'),\n    topK: sane($json.topK, 5),\n    ef_search: sane($json.ef_search, 80),\n    use_rerank: sane($json.use_rerank, false)\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        20
+      ],
+      "id": "722fa55f-e5ef-4929-8d79-6a2a98524eb6",
+      "name": "Fn • coalesce_defaults"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"text-embedding-3-small\",\n  \"input\": \"={{ $json.question }}\",\n  \"encoding_format\": \"float\"\n}\n",
+        "options": {}
+      },
+      "id": "a746a30c-3f06-4831-a3ea-36a1fe459b7c",
+      "name": "Generate Embedding (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        200,
+        20
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "UTCd21TZuULlFf5G",
+          "name": "openai_header"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $items(\"Fn • coalesce_defaults\", 0, 0).json;\nconst emb = $json.data?.[0]?.embedding;\nif (!Array.isArray(emb)) throw new Error('Embedding não encontrado em data[0].embedding');\n\nreturn [{\n  json: {\n    ...ctx,                        // mantém namespace/default/topK/ef_search saneados\n    embedding_dim: emb.length,\n    vector_literal: '[' + emb.join(',') + ']'\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        20
+      ],
+      "id": "9e4353bf-6ac3-48e7-9c8c-d08b20ff8e27",
+      "name": "Fn • build_vector_literal"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Garante estrutura estável mesmo sem linhas do Postgres\nconst itemsIn = items || [];\n\n// Em execuções vazias, some nodes do n8n criam 1 item sem \"json\".\nconst rows = itemsIn\n  .map(i => i.json || {})\n  .filter(r => r && (r.id !== undefined || r.content !== undefined));\n\nconst matches = rows.map(r => {\n  // score vindo do SELECT \"1 - (embedding <=> qvec) AS score\"\n  const score = typeof r.score === 'number' ? r.score : null;\n\n  return {\n    id: r.id ?? null,\n    source_uri: r.source_uri ?? null,\n    content: r.content ?? \"\",\n    score, // 0..1 (mais perto de 1 = mais similar)\n    meta: {\n      // adicione qualquer campo útil aqui quando a sua tabela tiver colunas extras\n      namespace: $json.namespace ?? 'default'\n    }\n  };\n});\n\n// Ordena por score desc se existir\nmatches.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));\n\nreturn [{\n  json: {\n    matches,\n    has_matches: matches.length > 0\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        20
+      ],
+      "id": "a23b6afb-2c43-4723-b6ee-16e4a8332ff5",
+      "name": "Fn • build_matches"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Fn • coalesce_defaults",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fn • coalesce_defaults": {
+      "main": [
+        [
+          {
+            "node": "Generate Embedding (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Embedding (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Fn • build_vector_literal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fn • build_vector_literal": {
+      "main": [
+        [
+          {
+            "node": "Postgres • knn_query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres • knn_query": {
+      "main": [
+        [
+          {
+            "node": "Fn • build_matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fn • build_matches": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "afd6fd34-bba6-4041-99b8-4e825e90d70d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "664a890e0a1e5e19c91e4f009efaa571635b76e9f57ce5b1556553e3cfe3c9b5"
+  },
+  "id": "oU3vQboPYkzB5dSF",
+  "tags": []
+}

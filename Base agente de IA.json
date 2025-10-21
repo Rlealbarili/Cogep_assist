@@ -1,0 +1,356 @@
+{
+  "name": "Base agente de IA",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a helpful assistant.\n\nUser question:\n\"{{ $('Set').item.json.question }}\"\n\nKnowledge base context (optional):\n{{ $json.matches && $json.matches.length\n  ? $json.matches.map(m => `- ${m.content || ''}`).join('\\n')\n  : 'NO_CONTEXT_AVAILABLE'\n}}\n\nInstructions:\n- If context is \"NO_CONTEXT_AVAILABLE\", answer using your general knowledge and say briefly that nothing was found in the internal base.\n- If there is context, ground your answer in it and cite the relevant snippets naturally.\n- Keep answers concise and helpful.\n",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        1260,
+        0
+      ],
+      "id": "90fa732e-4b73-4666-a658-bc6c455be010",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        240
+      ],
+      "id": "fd328a73-50f7-4a7e-88e1-2744a281632b",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "048IjRuyODYmXcs1",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Ensure SessionID').item.json.sessionID }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        1380,
+        240
+      ],
+      "id": "7dd871f7-e0d1-494b-bd3d-4c123a9c6543",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "oDN2Rg2txHI8YOXx",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "agente_IA",
+        "remoteJid": "={{ $('Webhook').item.json.body.body.message.from }}",
+        "messageText": "={{ $json.output }}",
+        "options_message": {}
+      },
+      "type": "n8n-nodes-evolution-api.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        -120
+      ],
+      "id": "9721b73d-0c78-4b89-81bb-77296ed78c36",
+      "name": "Enviar texto",
+      "credentials": {
+        "evolutionApi": {
+          "id": "YGG5QUBDaSFPd7U9",
+          "name": "Evolution account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "3047f45b-3b3d-48b6-bfee-dc14de48bc8a",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        0
+      ],
+      "id": "65c5f85e-0ba3-4f96-b610-94528763efb4",
+      "name": "Webhook",
+      "webhookId": "3047f45b-3b3d-48b6-bfee-dc14de48bc8a"
+    },
+    {
+      "parameters": {
+        "jsCode": "const question =\n  $json.body?.message?.conversation ??\n  $json.message ??\n  $json.text ??\n  '';\n\nreturn [{\n  json: {\n    question: question.trim()\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        0
+      ],
+      "id": "8adc4d88-40e7-4480-b71c-bc387e754489",
+      "name": "extract_input"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "oU3vQboPYkzB5dSF",
+          "mode": "list",
+          "cachedResultName": "pgvector_retrieve"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        960,
+        0
+      ],
+      "id": "9bdee888-660d-4454-a102-543302cd2d3a",
+      "name": "Execute Workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "19085609-a484-4969-9fcd-43bbc3001a7c",
+              "name": "namespace",
+              "value": "default",
+              "type": "string"
+            },
+            {
+              "id": "74a74119-28e3-4d6b-88d6-a7efda781892",
+              "name": "topK",
+              "value": 5,
+              "type": "number"
+            },
+            {
+              "id": "83bfca37-46b8-4b4f-89f0-a8d0f8c21903",
+              "name": "ef_search",
+              "value": 80,
+              "type": "number"
+            },
+            {
+              "id": "e0495ad2-ddfc-4218-91af-a4d21754ef03",
+              "name": "use_rerank",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "914c7b82-47d2-4da4-a392-d8c0671f0dec",
+              "name": "debug",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        520,
+        0
+      ],
+      "id": "bc160340-7b64-4923-81a0-2d5f2081324d",
+      "name": "Set"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f5a812d0-e235-4d98-9138-7118070a58a5",
+              "name": "sessionID",
+              "value": "={{ $json.sessionId ?? ('session-' + Date.now()) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        20,
+        0
+      ],
+      "id": "347d87c9-6706-420f-a1f9-c0eeb207fc9e",
+      "name": "Ensure SessionID"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.lealquantum.space",
+            "user-agent": "PostmanRuntime/7.48.0",
+            "content-length": "136",
+            "accept": "*/*",
+            "accept-encoding": "gzip, deflate, br",
+            "cache-control": "no-cache",
+            "content-type": "application/json",
+            "postman-token": "7dfa9d91-7edd-4d67-b81a-1c4f424e0599",
+            "x-forwarded-for": "54.86.50.139",
+            "x-forwarded-host": "n8n.lealquantum.space",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "11a6867446a4",
+            "x-real-ip": "54.86.50.139"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "body": {
+              "message": {
+                "from": "5542999601576",
+                "conversation": "Qual o horário de atendimento?"
+              }
+            }
+          },
+          "webhookUrl": "https://n8n.lealquantum.space/webhook-test/3047f45b-3b3d-48b6-bfee-dc14de48bc8a",
+          "executionMode": "test"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Enviar texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Ensure SessionID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract_input": {
+      "main": [
+        [
+          {
+            "node": "Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ensure SessionID": {
+      "main": [
+        [
+          {
+            "node": "extract_input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "863ea53b-5734-435d-a348-a8f34a8c60e5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "664a890e0a1e5e19c91e4f009efaa571635b76e9f57ce5b1556553e3cfe3c9b5"
+  },
+  "id": "zfBTJP8Zvb5ghQ4j",
+  "tags": []
+}

@@ -1,0 +1,303 @@
+{
+  "name": "ingest_master_orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 45
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        16,
+        -192
+      ],
+      "id": "3c114901-bc47-40cc-a815-cfa508beadc1",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Marca os itens como 'processing'\nUPDATE ai.ingestion_queue\nSET status = 'processing', attempts = attempts + 1, last_attempt_at = NOW()\nWHERE id IN (\n    -- Seleciona e bloqueia até 5 itens que estão pendentes ou falharam\n    SELECT id\n    FROM ai.ingestion_queue\n    WHERE status = 'pending' OR (status = 'failed' AND attempts < 3)\n    ORDER BY created_at\n    LIMIT 5\n    FOR UPDATE SKIP LOCKED\n)\n-- Retorna os dados completos dos itens que foram marcados\nRETURNING *;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        -48
+      ],
+      "id": "a756727b-9808-42b2-a945-05685a7731ee",
+      "name": "Claim Jobs",
+      "credentials": {
+        "postgres": {
+          "id": "4y53vruECf3l51tK",
+          "name": "VPS AI Postgres (rag_writer)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        448,
+        -48
+      ],
+      "id": "500ea521-5a5d-43c5-bf2f-20e3e57d584b",
+      "name": "Split in Batches"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE ai.ingestion_queue\nSET status = 'completed'\nWHERE id = '{{ $('Claim Jobs').item.json.id }}'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1312,
+        0
+      ],
+      "id": "f528989a-87da-4a0c-a78b-db94182d29a5",
+      "name": "Update Status to Completed",
+      "credentials": {
+        "postgres": {
+          "id": "4y53vruECf3l51tK",
+          "name": "VPS AI Postgres (rag_writer)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7d00f19f-30c1-4943-b37d-921144fed7d6",
+              "name": "subworkflow_inputs",
+              "value": "={{ { \"namespace\": $json.namespace, \"source\": { \"uri\": $json.source_uri } } }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        -32
+      ],
+      "id": "56ced36e-a485-4130-92ec-4643b658b932",
+      "name": "Prepare Sub-Workflow Inputs"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE ai.ingestion_queue\nSET status = 'failed',\n    last_error = '{{ $json.error.message | jsonStringify }}'\nWHERE id = '{{ $('Claim Jobs').item.json.id }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1312,
+        240
+      ],
+      "id": "b3ef6f9b-2727-4535-ba33-04edb727fa59",
+      "name": "Update Status to Failed",
+      "credentials": {
+        "postgres": {
+          "id": "4y53vruECf3l51tK",
+          "name": "VPS AI Postgres (rag_writer)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "79J4BogO3j0SCSjn",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/79J4BogO3j0SCSjn",
+          "cachedResultName": "ingest_one_document"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "namespace": "={{ $json.subworkflow_inputs.namespace }}",
+            "source": "={{ $json.subworkflow_inputs.source }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "namespace",
+              "displayName": "namespace",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "object",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1104,
+        -32
+      ],
+      "id": "7c607632-f383-4997-98e6-e8c68005b84e",
+      "name": "Execute Workflow",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        48
+      ],
+      "id": "aa481ac6-eaaa-4916-aa5e-4150f39f61af",
+      "name": "Code (Reset State)",
+      "disabled": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Claim Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim Jobs": {
+      "main": [
+        [
+          {
+            "node": "Split in Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split in Batches": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Code (Reset State)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status to Completed": {
+      "main": [
+        [
+          {
+            "node": "Split in Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Sub-Workflow Inputs": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status to Failed": {
+      "main": [
+        [
+          {
+            "node": "Split in Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow": {
+      "main": [
+        [
+          {
+            "node": "Update Status to Completed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Status to Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code (Reset State)": {
+      "main": [
+        [
+          {
+            "node": "Prepare Sub-Workflow Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0828a412-f4bf-4ea6-ae6c-387f76069c03",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8beb6412d571027a9b30d1cf4bf4cbc481568cb5b8e73666973b386f6afd347a"
+  },
+  "id": "aDxakNxciikA4vUI",
+  "tags": []
+}
