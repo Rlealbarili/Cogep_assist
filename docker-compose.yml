@@ -17,5 +17,12 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: cogep_assist_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
 volumes:
   pg_data:

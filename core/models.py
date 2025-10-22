@@ -1,33 +1,8 @@
-from pydantic import BaseModel, Field, HttpUrl
-from typing import Optional, Dict, Any
-
 import enum
 from datetime import datetime
 from sqlalchemy import (Column, Integer, String, DateTime, Text, UniqueConstraint, JSON, Enum, ForeignKey, Boolean)
 from sqlalchemy.orm import declarative_base, relationship
 from pgvector.sqlalchemy import Vector
-
-# --- Modelos Pydantic para validação de API ---
-
-class IngestionRequest(BaseModel):
-    """
-    Modelo de dados para a requisição de ingestão de um novo documento.
-    """
-    source_uri: HttpUrl = Field(
-        ...,
-        description="URL do documento a ser ingerido.",
-        examples=["https://example.com/my-document.pdf"]
-    )
-    namespace: str = Field(
-        default="default",
-        description="Namespace para isolamento de dados no banco vetorial.",
-        examples=["knowledge_base_v1"]
-    )
-    metadata: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Metadados opcionais a serem associados ao documento."
-    )
-
 
 # --- Modelos SQLAlchemy ORM para o Banco de Dados ---
 
@@ -48,7 +23,7 @@ class IngestionQueue(Base):
     id = Column(Integer, primary_key=True)
     source_uri = Column(String, nullable=False)
     namespace = Column(String, nullable=False, default='default')
-    status = Column(Enum(IngestionStatus), nullable=False, default=IngestionStatus.PENDING)
+    status = Column(Enum(IngestionStatus, schema="ai", native_enum=False), nullable=False, default=IngestionStatus.PENDING)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     processing_log = Column(Text)
@@ -62,7 +37,7 @@ class RagDocuments(Base):
     content = Column(Text, nullable=False)
     content_sha256 = Column(String(64), nullable=False, index=True)
     embedding = Column(Vector(1536)) # Tamanho para text-embedding-3-small
-    metadata = Column(JSON)
+    document_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 # Schema: crm

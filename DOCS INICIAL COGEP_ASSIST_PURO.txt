@@ -1,0 +1,505 @@
+DOCS INICIAL COGEP_ASSIST_PURO
+
+{
+  "session_id": "COGEP-20251021-1433",
+  "last_step_completed": "Revisão inicial do projeto e diagnóstico da configuração do banco de dados (schemas `ai` e `crm` criados).",
+  "current_objective": "Corrigir a importação da `Base` no `init_db.py` (de `core.schemas` para `core.models`) e executar o script para criar todas as tabelas do ORM no PostgreSQL.",
+  "architecture_decisions": [
+    "Padronizar `core/models.py` como a única fonte de verdade (Single Source of Truth) para os modelos ORM do SQLAlchemy."
+  ],
+  "open_issues": [
+    "O arquivo `core/schemas.py` está duplicando a lógica de `core/models.py`. Precisará ser refatorado ou removido para evitar conflitos futuros.",
+    "Existem dois serviços de ingestão (`ingestion/main.py` e `ingestion_service/main.py`) com definições Pydantic conflitantes. Precisaremos unificá-los."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1437",
+  "last_step_completed": "Revisão inicial do projeto e diagnóstico da configuração do banco de dados (schemas `ai` e `crm` criados).",
+  "current_objective": "Corrigir a importação da `Base` no `init_db.py` (de `core.schemas` para `core.models`) e executar o script para criar todas as tabelas do ORM no PostgreSQL.",
+  "architecture_decisions": [
+    "Padronizar `core/models.py` como a única fonte de verdade (Single Source of Truth) para os modelos ORM do SQLAlchemy.",
+    "Definido workflow de colaboração: Tutor (Análise/Geração) -> Operador (Humano) -> Gemini CLI (Execução)."
+  ],
+  "open_issues": [
+    "O arquivo `core/schemas.py` está duplicando a lógica de `core/models.py`. Precisará ser refatorado ou removido para evitar conflitos futuros.",
+    "Existem dois serviços de ingestão (`ingestion/main.py` e `ingestion_service/main.py`) com definições Pydantic conflitantes. Precisaremos unificá-los."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1445",
+  "last_step_completed": "Criação de todas as tabelas ORM (de `core/models.py`) no banco de dados PostgreSQL.",
+  "current_objective": "Refatorar a base de código para eliminar APIs duplicadas e definições de modelos de dados conflitantes.",
+  "architecture_decisions": [
+    "Consolidar `ingestion_service` como a única API de ingestão (removendo `ingestion`).",
+    "`core/models.py` é a fonte única da verdade para modelos ORM (SQLAlchemy).",
+    "Modelos Pydantic (schemas de API) devem residir nos módulos de serviço (ex: `ingestion_service/schemas.py`), não em `core/models.py`."
+  ],
+  "open_issues": [],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1510",
+  "last_step_completed": "Refatoração da base de código (remoção de APIs e modelos ORM/Pydantic duplicados).",
+  "current_objective": "Testar o endpoint /ingest da `ingestion_service` (FastAPI) para verificar se um novo job é criado com sucesso na tabela `ai.ingestion_queue`.",
+  "architecture_decisions": [
+    "Consolidar `ingestion_service` como a única API de ingestão (removendo `ingestion`).",
+    "`core/models.py` é a fonte única da verdade para modelos ORM (SQLAlchemy).",
+    "Modelos Pydantic (schemas de API) devem residir nos módulos de serviço (ex: `ingestion_service/schemas.py`), não em `core/models.py`."
+  ],
+  "open_issues": [
+    "Erro 'CommandNotFoundException' ao executar `uvicorn` diretamente, indicando que o venv não foi ativado no terminal do servidor."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1514",
+  "last_step_completed": "API de Ingestão (/ingest) validada. Jobs são criados com sucesso na tabela `ai.ingestion_queue`.",
+  "current_objective": "Preparar a infraestrutura para o Worker assíncrono: Adicionar o serviço Redis ao `docker-compose.yml` e carregar as variáveis `CELERY_BROKER_URL` e `CELERY_RESULT_BACKEND` no `core/config.py`.",
+  "architecture_decisions": [
+    "A API (`ingestion_service`) é responsável apenas por enfileirar jobs (fast response).",
+    "Um Worker (Celery) será responsável por processar a fila `ai.ingestion_queue` (async/heavy work)."
+  ],
+  "open_issues": [],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1528",
+  "last_step_completed": "Infraestrutura do Worker preparada (Redis rodando e `core/config.py` atualizado).",
+  "current_objective": "Criar e iniciar o Worker Celery e o Agendador (Beat) para processar (simuladamente) os jobs da `ai.ingestion_queue`.",
+  "architecture_decisions": [
+    "Usar `asyncio.run()` como ponte para lógica async (`AsyncSessionFactory`) dentro de tarefas Celery síncronas.",
+    "Replicar a lógica de `FOR UPDATE SKIP LOCKED` do n8n no worker Celery para reivindicação atômica de jobs."
+  ],
+  "open_issues": [],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1534",
+  "last_step_completed": "Infraestrutura do Worker preparada (Redis rodando e `core/config.py` atualizado).",
+  "current_objective": "Resolver o erro de conexão do Celery (`getaddrinfo failed`) alterando as URLs do Redis no `.env` de `redis` para `localhost`.",
+  "architecture_decisions": [
+    "Usar `asyncio.run()` como ponte para lógica async (`AsyncSessionFactory`) dentro de tarefas Celery síncronas.",
+    "Replicar a lógica de `FOR UPDATE SKIP LOCKED` do n8n no worker Celery para reivindicação atômica de jobs.",
+    "O ambiente de desenvolvimento local (workers, scripts) roda no host e deve se conectar aos containers Docker via `localhost`, não via nomes de serviço Docker."
+  ],
+  "open_issues": [
+    "[ERROR/MainProcess] consumer: Cannot connect to redis://redis:6379/0: Error 11001 connecting to redis:6379. getaddrinfo failed."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1538",
+  "last_step_completed": "Worker Celery (`python -m celery worker`) foi iniciado com sucesso após corrigir o `.env` para usar `localhost` para o Redis.",
+  "current_objective": "Iniciar o Agendador (Celery Beat) e realizar um teste E2E (End-to-End): criar um job via API (`test_ingest.py`) e verificar o processamento (simulado) pelo worker.",
+  "architecture_decisions": [
+    "Usar `asyncio.run()` como ponte para lógica async (`AsyncSessionFactory`) dentro de tarefas Celery síncronas.",
+    "Replicar a lógica de `FOR UPDATE SKIP LOCKED` do n8n no worker Celery para reivindicação atômica de jobs.",
+    "O ambiente de desenvolvimento local (workers, scripts) roda no host e deve se conectar aos containers Docker via `localhost`."
+  ],
+  "open_issues": [],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1540",
+  "last_step_completed": "Worker Celery e Celery Beat estão em execução e conectados com sucesso ao Redis.",
+  "current_objective": "Realizar um teste E2E (End-to-End): criar um job via API (`test_ingest.py`) e verificar o processamento (simulado) pelo worker e a atualização do status no DB.",
+  "architecture_decisions": [
+    "Usar `asyncio.run()` como ponte para lógica async (`AsyncSessionFactory`) dentro de tarefas Celery síncronas.",
+    "Replicar a lógica de `FOR UPDATE SKIP LOCKED` do n8n no worker Celery para reivindicação atômica de jobs.",
+    "O ambiente de desenvolvimento local (workers, scripts) roda no host e deve se conectar aos containers Docker via `localhost`."
+  ],
+  "open_issues": [],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+
+{
+  "session_id": "COGEP-20251021-1544",
+  "last_step_completed": "API de Ingestão criou o Job ID 2 com sucesso.",
+  "current_objective": "Resolver o crash do Worker Celery (`ValueError: not enough values to unpack`) reiniciando-o com o pool `-P solo` (compatível com Windows).",
+  "architecture_decisions": [
+    "O pool de concorrência padrão do Celery (`prefork`) é incompatível com Windows.",
+    "Utilizar o pool `-P solo` para desenvolvimento e testes do Celery no Windows."
+  ],
+  "open_issues": [
+    "ERROR/MainProcess] Task handler raised error: ValueError('not enough values to unpack (expected 3, got 0)')"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1548",
+  "last_step_completed": "Celery Beat iniciado. Worker tentou executar a tarefa.",
+  "current_objective": "Refatorar `worker_service/tasks.py` para usar uma única chamada `asyncio.run()` e corrigir o erro `InterfaceError`.",
+  "architecture_decisions": [
+    "O pool de concorrência padrão do Celery (`prefork`) é incompatível com Windows.",
+    "Utilizar o pool `-P solo` para desenvolvimento e testes do Celery no Windows.",
+    "Uma única tarefa Celery deve usar apenas um `asyncio.run()` para encapsular toda a lógica assíncna, evitando conflitos no pool de conexões."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.InterfaceError: ... cannot perform operation: another operation is in progress"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1554",
+  "last_step_completed": "Refatorado `tasks.py` para usar um único `asyncio.run()`, corrigindo o `InterfaceError`.",
+  "current_objective": "Corrigir `DataError` em `tasks.py` convertendo objetos Enum para string (`.value`) ao passá-los para queries SQL brutas.",
+  "architecture_decisions": [
+    "Utilizar o pool `-P solo` para desenvolvimento e testes do Celery no Windows.",
+    "Uma única tarefa Celery deve usar apenas um `asyncio.run()` para encapsular toda a lógica assíncna.",
+    "Queries SQL brutas (`text()`) exigem conversão manual de Enums para seus valores (`.value`), ao contrário do ORM."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.DBAPIError: ... invalid input for query argument $1: ... (expected str, got IngestionStatus)"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1557",
+  "last_step_completed": "Corrigido erro de DataError (passando .value), mas encontrado erro de tipo de Enum no Postgres.",
+  "current_objective": "Corrigir `InvalidTextRepresentationError` em `tasks.py` adicionando um cast explícito (`::ingestionstatus`) às queries SQL brutas.",
+  "architecture_decisions": [
+    "Utilizar o pool `-P solo` para desenvolvimento e testes do Celery no Windows.",
+    "Uma única tarefa Celery deve usar apenas um `asyncio.run()`.",
+    "Queries SQL brutas (`text()`) contra colunas ENUM do Postgres exigem tanto o valor (`.value`) quanto um cast de tipo (`::enum_type_name`)."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.DBAPIError: ... invalid input value for enum ingestionstatus: \"processing\""
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1600",
+  "last_step_completed": "Corrigido `InvalidTextRepresentationError` adicionando cast, mas encontrado erro de sintaxe.",
+  "current_objective": "Corrigir `PostgresSyntaxError` em `tasks.py` substituindo o operador de cast `::` pela função `CAST(... AS ...)`.",
+  "architecture_decisions": [
+    "Utilizar o pool `-P solo` para desenvolvimento e testes do Celery no Windows.",
+    "Queries SQL brutas (`text()`) contra colunas ENUM do Postgres exigem tanto o valor (`.value`) quanto um cast de tipo.",
+    "A sintaxe de cast `::type` entra em conflito com os placeholders `:param` do SQLAlchemy; usar `CAST(:param AS type)`."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.ProgrammingError: ... syntax error at or near \":\""
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1602",
+  "last_step_completed": "Worker Celery reiniciado com sucesso, usando a correção `CAST(... AS ...)` e o pool `-P solo`.",
+  "current_objective": "Iniciar o Celery Beat e confirmar que o worker processa com sucesso os jobs pendentes da fila (corrigindo o `PostgresSyntaxError`).",
+  "architecture_decisions": [
+    "Utilizar o pool `-P solo` para desenvolvimento e testes do Celery no Windows.",
+    "Queries SQL brutas (`text()`) contra colunas ENUM do Postgres exigem tanto o valor (`.value`) quanto um cast de tipo.",
+    "A sintaxe de cast `::type` entra em conflito com os placeholders `:param` do SQLAlchemy; usar `CAST(:param AS type)`."
+  ],
+  "open_issues": [],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1604",
+  "last_step_completed": "A correção com `CAST()` falhou, revelando um provável estado de banco de dados inconsistente.",
+  "current_objective": "Resetar o schema do banco de dados (usando `drop_all` e `create_all` no `init_db.py`) para garantir que os tipos Enum correspondam ao `core/models.py`.",
+  "architecture_decisions": [
+    "O comando `create_all` do SQLAlchemy não altera tabelas existentes, levando a um estado inconsistente após a refatoração dos modelos (conflito de Enums).",
+    "Usar `drop_all` + `create_all` durante o desenvolvimento para garantir a sincronia do schema."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.DBAPIError: ... invalid input value for enum ingestionstatus: \"processing\" (causado por schema obsoleto)."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1609",
+  "last_step_completed": "Tentativa de resetar o DB (drop_all/create_all) e re-executar o worker.",
+  "current_objective": "Pausa para pesquisa. Diagnosticar por que o `InvalidTextRepresentationError` persiste mesmo após `drop_all` e uso de `CAST()`.",
+  "architecture_decisions": [
+    "Usar `CAST(:param AS type)` é a sintaxe correta para cast de placeholders.",
+    "A persistência do `InvalidTextRepresentationError` implica que o `drop_all` não foi eficaz e o schema do DB (especificamente o tipo ENUM `ingestionstatus`) está obsoleto."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.DBAPIError: ... invalid input value for enum ingestionstatus: \"processing\" (CAUSA RAIZ)",
+    "AttributeError: 'NoneType' object has no attribute 'send' (Sintoma secundário)",
+    "InterfaceError: ... another operation is in progress (Sintoma secundário)"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1615",
+  "last_step_completed": "Pesquisa do usuário confirmou a dessincronização do ENUM e o problema de 'zombie worker'.",
+  "current_objective": "Aplicar a correção definitiva: 1) Forçar `DROP TYPE ... CASCADE` no `init_db.py`[cite: 61, 99]. 2) Refatorar `tasks.py` para usar um pool de conexão por tarefa[cite: 531, 546].",
+  "architecture_decisions": [
+    "O `drop_all` do SQLAlchemy é insuficiente para ENUMs; `DROP TYPE ... CASCADE` manual é necessário[cite: 61, 62].",
+    "Pools de conexão globais (`AsyncSessionFactory`) são inseguros com `asyncio.run()` no Celery; mudar para um padrão de engine-por-tarefa com `engine.dispose()`[cite: 531, 546]."
+  ],
+  "open_issues": [],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1644",
+  "last_step_completed": "Falha de conexão no DBeaver (Connection refused na porta 5433).",
+  "current_objective": "Diagnosticar a falha de conexão do DBeaver. A porta 5433 está incorreta. Solicitar nova tentativa na porta 5432 com a senha associada.",
+  "architecture_decisions": [
+    "O "Relatório de Configuração Inicial" estava incorreto sobre a porta 5433."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.DBAPIError: ... invalid input value for enum ingestionstatus: \"processing\"",
+    "Conexão com o DBeaver falhou (Connection refused)."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1648",
+  "last_step_completed": "Reset manual do DB (`DROP...CASCADE`) e refatoração do worker (engine-por-tarefa) concluídos.",
+  "current_objective": "Corrigir `InvalidTextRepresentationError` tornando o cast do ENUM explícito com o schema (`CAST(... AS ai.ingestionstatus)`).",
+  "architecture_decisions": [
+    "O `init_db.py` e o `core/models.py` criam o tipo `ingestionstatus` dentro do schema `ai`.",
+    "Queries SQL brutas (`text()`) devem usar nomes de tipo totalmente qualificados (schema.tipo) para evitar ambiguidades no `search_path`."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.DBAPIError: ... invalid input value for enum ingestionstatus: \"processing\" (Causa raiz: cast não qualificado)"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1653",
+  "last_step_completed": "Identificado `UndefinedObjectError` (tipo `ai.ingestionstatus` não existe).",
+  "current_objective": "Corrigir `core/models.py` para definir `Enum(IngestionStatus, schema=\"ai\")`, forçar o reset do DB e re-testar.",
+  "architecture_decisions": [
+    "A definição `Enum(EnumType)` no SQLAlchemy *não* herda o schema do `__table_args__` por padrão.",
+    "O schema deve ser especificado *dentro* do `Enum()` para que o tipo seja criado no schema correto (ex: `ai.ingestionstatus`)."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.ProgrammingError: ... type \"ai.ingestionstatus\" does not exist"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1658",
+  "last_step_completed": "Corrigido `UndefinedObjectError` especificando `schema=\"ai\"` no `Enum` e resetando o DB.",
+  "current_objective": "Diagnosticar por que o `InvalidTextRepresentationError` retornou. Inspecionar os labels reais do tipo `ai.ingestionstatus` no DB via DBeaver.",
+  "architecture_decisions": [
+    "A especificação `schema=\"ai\"` no `Enum()` fez o SQLAlchemy criar o tipo no schema correto.",
+    "A persistência do `InvalidTextRepresentationError` sugere que a criação do tipo pelo `init_db.py` está incompleta (não definindo os labels)."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.DBAPIError: ... invalid input value for enum ai.ingestionstatus: \"processing\""
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1701",
+  "last_step_completed": "Inspecionado o tipo ENUM no DB via DBeaver, confirmando labels em maiúsculas.",
+  "current_objective": "Corrigir `core/models.py` com `native_enum=False`, forçar reset do DB e re-testar.",
+  "architecture_decisions": [
+    "O SQLAlchemy `Enum()` por padrão usa os *nomes* dos membros para criar o tipo ENUM no PG, não os *valores*.",
+    "Usar `native_enum=False` instrui o SQLAlchemy a usar os *valores* do Enum Python como labels no PG ENUM."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.DBAPIError: ... invalid input value for enum ai.ingestionstatus: \"processing\" (Causa raiz: Mismatch de case entre Python e PG ENUM)"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1707",
+  "last_step_completed": "Pipeline E2E (API -> Fila -> Worker -> DB Status Update) validado com sucesso após correção do ENUM.",
+  "current_objective": "Iniciar a implementação da lógica real do worker: Adicionar download de conteúdo via `httpx` e tratamento básico de erros.",
+  "architecture_decisions": [
+    "Usar `native_enum=False` no SQLAlchemy para alinhar os valores do Enum Python com os labels do PG ENUM."
+  ],
+  "open_issues": [],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1709",
+  "last_step_completed": "Tentativa de correção com `native_enum=False` falhou com o mesmo `InvalidTextRepresentationError`.",
+  "current_objective": "Diagnosticar a falha final. Inspecionar o tipo de dado real da coluna `status` no DB via DBeaver para verificar o efeito de `native_enum=False`.",
+  "architecture_decisions": [
+    "Usar `native_enum=False` instrui o SQLAlchemy a usar os *valores* do Enum Python.",
+    "Hipótese: `native_enum=False` pode fazer SQLAlchemy usar VARCHAR em vez de um ENUM nativo, invalidando nosso CAST."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.DBAPIError: ... invalid input value for enum ai.ingestionstatus: \"processing\" (Causa raiz ainda incerta, ligada a `native_enum=False`)."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1715",
+  "last_step_completed": "Identificado `SyntaxError` em `tasks.py` devido a `try...except` mal posicionado.",
+  "current_objective": "Corrigir a estrutura `try...except` em `tasks.py` para envolver o processamento de cada job individualmente dentro do loop `for`.",
+  "architecture_decisions": [
+    "O tratamento de erros (download, processamento) deve ser feito por job individualmente para maior resiliência do worker."
+  ],
+  "open_issues": [
+    "SyntaxError: expected 'except' or 'finally' block"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251021-1718",
+  "last_step_completed": "Identificado que `native_enum=False` não resolveu; `UndefinedObjectError` persiste.",
+  "current_objective": "Reverter `native_enum=False`, criar o tipo `ai.ingestionstatus` manualmente via DBeaver, executar `init_db.py` para criar tabelas e re-testar.",
+  "architecture_decisions": [
+    "A criação automática do tipo ENUM pelo SQLAlchemy (`create_all`) está falhando consistentemente por motivos desconhecidos.",
+    "Mudar para criação manual do tipo ENUM via SQL e deixar o `create_all` responsável apenas pelas tabelas."
+  ],
+  "open_issues": [
+    "sqlalchemy.exc.ProgrammingError: ... type \"ai.ingestionstatus\" does not exist"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+**Protocolo de Transferência de Estado (PTS-1)**
+
+```json
+{
+  "session_id": "COGEP-20251021-1738",
+  "last_step_completed": "Decidido adotar Alembic + alembic-postgresql-enum como solução definitiva para o gerenciamento do schema.",
+  "current_objective": "Configurar o Alembic: Adicionar dependências, inicializar, configurar `alembic.ini` e `alembic/env.py` (importar Base, setar target_metadata, include_schemas=True).",
+  "architecture_decisions": [
+    "Adotar Alembic para gerenciamento de migrações de banco de dados.",
+    "Usar `alembic-postgresql-enum` para lidar com migrações de tipos ENUM.",
+    "Abandonar `init_db.py` (create_all) em favor das migrações Alembic."
+  ],
+  "open_issues": [
+    "O worker ainda falha devido à inconsistência do tipo ENUM no banco (a ser resolvido pelo Alembic)."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}

@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .schemas import IngestionRequest
 from core.database import get_db
-from core.schemas import IngestionJob
+from core.models import IngestionQueue as IngestionJob
 
 
 app = FastAPI(

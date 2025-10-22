@@ -5,6 +5,8 @@ python-dotenv
 # --- Banco de Dados ---
 sqlalchemy
 asyncpg
+psycopg2-binary
+pgvector
 # --- Filas e Workers ---
 celery
 redis
@@ -13,3 +15,7 @@ httpx
 openai
 # --- NLP/Tokenização ---
 tiktoken
+
+# --- Migrações de Banco de Dados ---
+alembic
+alembic-postgresql-enum
