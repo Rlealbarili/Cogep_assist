@@ -1,0 +1,84 @@
+Documentação: Uso da Unstructured API no Projeto Agente COGEP
+
+1. Propósito:
+
+A Unstructured API é utilizada no pipeline de ingestão de dados (ingest_one_document) para realizar o parse inteligente de documentos brutos obtidos de diversas fontes (inicialmente URLs, mas planejado para arquivos como PDF, DOCX, etc.). Seu objetivo principal é extrair o conteúdo textual relevante, limpando elementos indesejados (como menus de navegação, cabeçalhos, rodapés de sites) e segmentando o texto em elementos lógicos (parágrafos, títulos, listas), antes da etapa de chunking e embedding.
+
+2. Implementação no Projeto n8n (ingest_one_document):
+
+Ambiente: A API Unstructured foi implantada como um container Docker (quay.io/unstructured-io/unstructured-api) no ambiente de ingestão local (sua máquina).
+
+Comunicação: O container n8n local se comunica com o container da Unstructured API através de uma rede Docker compartilhada (local-ingestion-net).
+
+Nó n8n Utilizado: Um nó HTTP Request.
+
+Configuração do Nó:
+
+URL: http://unstructured-api:8000/general/v0/general (Usando o nome do container como hostname na rede Docker interna).
+
+Método: POST.
+
+Body Content Type: Form-Data Multipart.
+
+Input: O nó recebe o conteúdo binário ou textual baixado pelo nó anterior (Fetch URL Content) e o envia no corpo da requisição sob a chave files.
+
+Output: A API retorna um array JSON. Cada objeto no array representa um elemento detectado no documento (ex: { "type": "NarrativeText", "text": "Conteúdo do parágrafo..." }, { "type": "Title", "text": "Título da Seção" }).
+
+Processamento Subsequente: O nó consolidate_text (um nó de Código) recebe este array JSON e concatena os campos text de todos os elementos em uma única string de texto limpo, que é então passada para as etapas de chunking e hashing.
+
+3. Integração Proposta no agent_cogep_codigo_puro (Python/FastAPI):
+
+Localização: A lógica de chamada à Unstructured API residirá dentro do Worker de Ingestão Assíncrono (provavelmente uma tarefa Celery).
+
+Mecanismo: O código Python do worker fará uma requisição HTTP para a API Unstructured.
+
+Biblioteca Python: A biblioteca httpx (já incluída no requirements.txt) é a recomendada para fazer chamadas HTTP assíncronas de forma eficiente.
+
+Configuração da Chamada:
+
+URL: Será lida a partir da variável de ambiente UNSTRUCTURED_API_URL definida no arquivo .env. Isso permite flexibilidade (apontar para http://localhost:8000, para um nome de container Docker como http://unstructured-api:8000, ou até para uma URL de API gerenciada no futuro).
+
+Método: POST.
+
+Endpoint: /general/v0/general (para detecção automática de tipo e parse genérico).
+
+Input: O conteúdo bruto do documento (bytes ou string) obtido na etapa de fetch será enviado como multipart/form-data usando o parâmetro files da biblioteca httpx. Exemplo simplificado:
+
+Python
+
+import httpx
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+UNSTRUCTURED_API_URL = os.getenv("UNSTRUCTURED_API_URL")
+
+async def parse_document(file_content: bytes, filename: str):
+    files = {'files': (filename, file_content)}
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(f"{UNSTRUCTURED_API_URL}/general/v0/general", files=files)
+            response.raise_for_status() # Lança exceção para erros HTTP (4xx, 5xx)
+            parsed_elements = response.json()
+            # Processar 'parsed_elements' para extrair e concatenar o texto
+            full_text = "\\n\\n".join([element.get("text", "") for element in parsed_elements])
+            return full_text
+        except httpx.HTTPStatusError as e:
+            print(f"Erro HTTP ao chamar Unstructured API: {e.response.status_code} - {e.response.text}")
+            # Implementar lógica de erro (ex: marcar job como failed)
+            return None
+        except Exception as e:
+            print(f"Erro ao processar com Unstructured API: {e}")
+            # Implementar lógica de erro
+            return None
+Processamento do Output: O código Python receberá o array JSON e implementará a lógica para concatenar os campos text (similar ao nó consolidate_text).
+
+Deployment: O container da Unstructured API precisará ser incluído no docker-compose.yml do ambiente de desenvolvimento/produção do projeto Python, garantindo que ele esteja na mesma rede Docker que os workers de ingestão para comunicação interna eficiente.
+
+4. Considerações:
+
+Endpoint Específico: Para maior controle (ex: forçar o parse de um PDF), a Unstructured API oferece endpoints específicos (/partition/pdf, /partition/html, etc.) que podem ser usados em vez do genérico /general/v0/general.
+
+Modelos Locais: A Unstructured pode ser configurada para usar modelos de detecção que rodam localmente, o que pode ser relevante se houver preocupações com privacidade ou custo de APIs externas (embora o parse básico geralmente não envolva LLMs externos).
+
+Esta documentação deve fornecer um bom overview de como a Unstructured API se encaixa em ambos os projetos.
