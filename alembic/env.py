@@ -1,10 +1,14 @@
 from logging.config import fileConfig
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 from sqlalchemy import engine_from_config, create_engine
 from sqlalchemy import pool
 from sqlalchemy.engine.url import make_url
 
 from alembic import context
+import alembic_postgresql_enum
 
 from core.models import Base
 from core.config import DATABASE_URL

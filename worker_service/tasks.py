@@ -95,11 +95,11 @@ async def claim_jobs_from_db(session):
     """
     claim_query = text("""
         UPDATE ai.ingestion_queue
-        SET status = CAST(:processing_status AS ai.ingestionstatus), updated_at = NOW()
+        SET status = :processing_status, updated_at = NOW()
         WHERE id IN (
             SELECT id
             FROM ai.ingestion_queue
-            WHERE status = CAST(:pending_status AS ai.ingestionstatus)
+            WHERE status = :pending_status
             ORDER BY created_at
             LIMIT 5
             FOR UPDATE SKIP LOCKED
@@ -124,7 +124,7 @@ async def update_job_status(session, job_id: int, status: IngestionStatus):
     """
     update_query = text("""
         UPDATE ai.ingestion_queue
-        SET status = CAST(:status AS ai.ingestionstatus), updated_at = NOW()
+        SET status = :status, updated_at = NOW()
         WHERE id = :job_id
     """)
     async with session.begin(): # Usa a transação da sessão passada
