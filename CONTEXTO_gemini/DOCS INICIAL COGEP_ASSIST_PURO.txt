@@ -503,3 +503,346 @@ DOCS INICIAL COGEP_ASSIST_PURO
     "Conformidade LGPD"
   ]
 }
+
+**PTS-1 (Início da Janela - Diagnóstico Inicial)**
+
+```json
+{
+  "session_id": "COGEP-20251023-10:00",
+  "last_step_completed": "Identificado que o worker Celery ('worker_service/tasks.py') não estava processando jobs, apesar das correções anteriores. User forneceu logs ('PROBLEMA NO WORKER.txt') mostrando 'UndefinedObjectError: type \"ai.ingestionstatus\" does not exist' e documentos de pesquisa ('pesquisas worker', 'pesquisas ENUM').",
+  "current_objective": "Resolver o erro 'UndefinedObjectError' aplicando a estratégia de migração Alembic + 'alembic-postgresql-enum', abandonando 'init_db.py'.",
+  "architecture_decisions": [
+    "Adotar Alembic + 'alembic-postgresql-enum' como solução definitiva para schema management (AD-004).",
+    "Confirmar que 'core/models.py' usa 'native_enum=False' para a coluna 'status'."
+  ],
+  "open_issues": [
+    "Worker falhando com 'UndefinedObjectError' devido à inconsistência do tipo ENUM."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-2 (Configuração do Alembic)**
+
+```json
+{
+  "session_id": "COGEP-20251023-10:15",
+  "last_step_completed": "Gerado JSON para configurar Alembic: adicionar 'alembic-postgresql-enum' ao 'requirements.txt' e importar a extensão em 'alembic/env.py'.",
+  "current_objective": "Executar manualmente os passos de setup do Alembic: instalar dependências, limpar DB, gerar baseline e aplicar upgrade.",
+  "architecture_decisions": [
+    "Alembic configurado como SSoT para DDL."
+  ],
+  "open_issues": [
+    "Worker ainda inoperante até a migração ser aplicada."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-3 (Correção de Credenciais)**
+
+```json
+{
+  "session_id": "COGEP-20251023-10:25",
+  "last_step_completed": "Tentativa de 'alembic upgrade head' falhou com 'OperationalError: password authentication failed'.",
+  "current_objective": "Corrigir o arquivo '.env' para fornecer a 'DATABASE_URL' correta, sincronizando as credenciais usadas pelo Docker Compose e pela aplicação/Alembic.",
+  "architecture_decisions": [
+    "'.env' deve conter tanto as variáveis individuais (POSTGRES_USER, etc.) para Docker Compose quanto a 'DATABASE_URL' composta para a aplicação."
+  ],
+  "open_issues": [
+    "Erro de autenticação bloqueando a migração Alembic."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-4 (Correção do Ambiente Python - venv)**
+
+```json
+{
+  "session_id": "COGEP-20251023-10:40",
+  "last_step_completed": "Corrigido '.env' e recriado container Docker. Tentativa de 'alembic revision' falhou com 'CommandNotFoundException'.",
+  "current_objective": "Criar e ativar um ambiente virtual Python ('venv') para isolar dependências e garantir que comandos como 'alembic' e 'celery' estejam no PATH.",
+  "architecture_decisions": [
+    "Adotar 'venv' como padrão para gerenciamento de ambiente Python do projeto."
+  ],
+  "open_issues": [
+    "Comandos do projeto não encontrados no PATH do sistema devido à instalação 'user'."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-5 (Correção da Migração Alembic - `pgvector`)**
+
+```json
+{
+  "session_id": "COGEP-20251023-10:55",
+  "last_step_completed": "Ambiente 'venv' criado e ativado. 'alembic revision --autogenerate' executado com sucesso. 'alembic upgrade head' falhou com 'NameError: name 'pgvector' is not defined'.",
+  "current_objective": "Corrigir manualmente o script de migração Alembic gerado ('e325fe9953e1...') adicionando a importação 'import pgvector.sqlalchemy'.",
+  "architecture_decisions": [
+    "Scripts de migração Alembic auto-gerados podem precisar de ajustes manuais para importações de tipos de extensões (como pgvector)."
+  ],
+  "open_issues": [
+    "Erro de Python ('NameError') no script de migração impede a aplicação do schema."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-6 (Diagnóstico Final do ENUM vs VARCHAR)**
+
+```json
+{
+  "session_id": "COGEP-20251023-11:10",
+  "last_step_completed": "Script de migração corrigido. 'alembic downgrade base' e 'alembic upgrade head' executados com sucesso. Query de verificação do ENUM ('enum_range') falhou com 'type \"ai.ingestionstatus\" does not exist'.",
+  "current_objective": "Confirmar a causa raiz final: A definição do modelo com 'native_enum=False' instruiu o Alembic a (corretamente) *não* criar o tipo ENUM nativo, resultando em uma coluna VARCHAR. O erro 'type does not exist' na query de verificação é esperado.",
+  "architecture_decisions": [
+    "Confirmado: A coluna 'status' é VARCHAR, não um ENUM nativo.",
+    "Queries SQL brutas no worker devem ser ajustadas para tratar 'status' como string."
+  ],
+  "open_issues": [
+    "Inconsistência entre a expectativa (tipo ENUM nativo) e a realidade (VARCHAR) causa falha na verificação e (previsivelmente) no worker."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-7 (Remoção do `CAST` no Worker)**
+
+```json
+{
+  "session_id": "COGEP-20251023-11:15",
+  "last_step_completed": "Confirmado que 'status' é VARCHAR. Diagnóstico: Worker falha porque suas queries SQL brutas usam 'CAST(... AS ai.ingestionstatus)' para um tipo que não existe.",
+  "current_objective": "Gerar JSON para a IA Executora remover o 'CAST' das queries 'claim_jobs_from_db' e 'update_job_status' em 'worker_service/tasks.py', alinhando o código com o schema VARCHAR.",
+  "architecture_decisions": [
+    "Queries SQL brutas devem ser compatíveis com o tipo de coluna real (VARCHAR)."
+  ],
+  "open_issues": [
+    "Worker continua falhando devido ao 'CAST' para tipo inexistente."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-8 (Diagnóstico Pós-`CAST`: Dados Inconsistentes)**
+
+```json
+{
+  "session_id": "COGEP-20251023-11:20",
+  "last_step_completed": "IA Executora removeu o 'CAST'. Teste E2E falhou: Worker logou 'No pending jobs found.'. Consulta DBeaver mostrou jobs com 'status = \"PENDING\"' (maiúsculas). IA Executora (incorretamente) afirmou que '.value' já era usado.",
+  "current_objective": "Corrigir os dados na tabela 'ai.ingestion_queue', atualizando 'PENDING' para 'pending' (minúsculas) para corresponder ao valor esperado pelo código (`IngestionStatus.PENDING.value`).",
+  "architecture_decisions": [
+    "Dados no DB devem ser consistentes com os valores esperados pelo código (minúsculas)."
+  ],
+  "open_issues": [
+    "Discrepância de maiúsculas/minúsculas ('PENDING' vs 'pending') impede o worker de encontrar jobs."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-9 (Diagnóstico Pós-Dados: Visibilidade Transacional)**
+
+```json
+{
+  "session_id": "COGEP-20251023-11:25",
+  "last_step_completed": "Dados corrigidos para 'pending' (minúsculas). Novo teste E2E (com tabela limpa) falhou: API criou Job 1 ('pending'), mas worker logou 'No pending jobs found.'.",
+  "current_objective": "Diagnosticar a causa raiz restante, focando em problemas de visibilidade transacional entre API e Worker (nível READ COMMITTED), conforme pesquisa do usuário.",
+  "architecture_decisions": [
+    "Manter 'native_enum=False' e queries sem 'CAST'."
+  ],
+  "open_issues": [
+    "Worker Celery não 'vê' jobs recém-criados e commitados pela API, mesmo com código e dados aparentemente corretos. Suspeita: Isolamento de Transação/Snapshot."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-10 (Implementação de Correções de Transação)**
+
+```json
+{
+  "session_id": "COGEP-20251023-11:30",
+  "last_step_completed": "Análise da pesquisa confirmou visibilidade transacional como causa provável. Gerado JSON para IA Executora aplicar soluções: 'session.begin()' explícito em 'get_db', reforçar 'Sessão por Sondagem' no worker e adicionar 'NullPool'.",
+  "current_objective": "Aplicar as modificações de gerenciamento de sessão/transação e re-testar o fluxo E2E.",
+  "architecture_decisions": [
+    "Adotar gerenciamento explícito de transações ('session.begin()') e 'NullPool' para robustez."
+  ],
+  "open_issues": [
+    "Problema de visibilidade transacional."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-11 (Erro na API Pós-Correção)**
+
+```json
+{
+  "session_id": "COGEP-20251023-11:35",
+  "last_step_completed": "Modificações de transação aplicadas. Teste E2E falhou: API retornou 500 com 'InvalidRequestError: Can't operate on closed transaction...' em 'db.refresh()'.",
+  "current_objective": "Corrigir o erro na API revertendo a função 'get_db' para sua versão original (sem 'session.begin()' interno), deixando o controle de commit/refresh explícito no endpoint.",
+  "architecture_decisions": [
+    "Controle de transação explícito ('commit', 'refresh') no endpoint API não deve conflitar com gerenciamento automático ('session.begin()') na dependência 'get_db'."
+  ],
+  "open_issues": [
+    "Erro 500 na API impede a criação de jobs."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-12 (Diagnóstico Pós-Reversão: DEBUG Logs Faltando)**
+
+```json
+{
+  "session_id": "COGEP-20251023-11:40",
+  "last_step_completed": "Função 'get_db' revertida. API agora retorna 202. Teste E2E falhou: Worker (iniciado com '-l debug') continua logando 'No pending jobs found.' e *não* mostra os logs '[WORKER DBG]...' adicionados anteriormente.",
+  "current_objective": "Diagnosticar por que os logs DEBUG não estão aparecendo. Hipóteses: Nível de log incorreto na inicialização do worker ou erro prematuro na função 'process_jobs_logic' antes dos logs.",
+  "architecture_decisions": [
+    "Logging DEBUG é necessário para inspecionar a execução interna do worker."
+  ],
+  "open_issues": [
+    "Worker ainda não encontra jobs. Ausência de logs DEBUG impede diagnóstico mais profundo."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-13 (Confirmação: Erro de Binding de Parâmetro)**
+
+```json
+{
+  "session_id": "COGEP-20251023-11:45",
+  "last_step_completed": "Confirmado que worker foi iniciado com '-l info'. Reiniciado com '-l debug'. Logs DEBUG apareceram, revelando que a query 'claim_jobs_from_db' compilada com 'literal_binds=True' mostrava 'status = NULL'.",
+  "current_objective": "Corrigir o problema de binding de parâmetros na query 'claim_jobs_from_db' usando f-strings seguras (pois os valores são constantes Enum) em vez de bind parameters (:pending_status, :processing_status).",
+  "architecture_decisions": [
+    "Binding de parâmetros nomeados do SQLAlchemy 'text()' mostrou-se não confiável neste contexto; f-strings seguras são uma alternativa viável para constantes."
+  ],
+  "open_issues": [
+    "Binding incorreto de parâmetros na query 'claim_jobs_from_db' faz com que ela procure por 'status = NULL'."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+```
+
+-----
+
+**PTS-14 (Estado Atual)**
+
+```json
+{
+  "session_id": "COGEP-20251023-11:50",
+  "last_step_completed": "IA Executora modificou a query 'claim_jobs_from_db' para usar f-strings. Teste E2E subsequente falhou: worker continua logando 'No pending jobs found'.",
+  "current_objective": "Diagnosticar a causa raiz da falha persistente do worker em encontrar jobs pendentes, retornando à hipótese de problemas de visibilidade transacional entre a API e o Worker no PostgreSQL (nível READ COMMITTED), conforme a pesquisa.",
+  "architecture_decisions": [
+    "Query 'claim_jobs_from_db' usa f-strings para status.",
+    "Gerenciamento de sessão/transação conforme PTS-10."
+  ],
+  "open_issues": [
+    "Worker Celery ('worker_service/tasks.py') não detecta linhas com 'status = \"pending\"' na tabela 'ai.ingestion_queue', mesmo após correções de binding e dados. Suspeita principal: problema persistente de visibilidade transacional."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+
+{
+  "session_id": "COGEP-20251023-1127",
+  "last_step_completed": "Refatorada a query 'claim_jobs_from_db' para usar f-strings, eliminando problemas de bind parameters. Teste E2E subsequente falhou: worker continua logando 'No pending jobs found', apesar da API criar jobs 'pending' com sucesso.",
+  "current_objective": "Diagnosticar a causa raiz da falha persistente do worker em encontrar jobs pendentes, focando em problemas de visibilidade transacional entre a API e o Worker no PostgreSQL (nível READ COMMITTED), conforme a pesquisa.",
+  "architecture_decisions": [
+    "Alembic + alembic-postgresql-enum para gerenciamento de schema (AD-004).",
+    "Coluna 'status' definida como VARCHAR via 'native_enum=False' em core/models.py.",
+    "Worker usa padrão 'Sessão por Sondagem' com 'session.begin()' e 'NullPool'.",
+    "API usa dependência 'get_db' com gerenciamento de sessão padrão (sem 'session.begin()' interno)."
+  ],
+  "open_issues": [
+    "Worker Celery ('worker_service/tasks.py') não detecta linhas com 'status = \"pending\"' na tabela 'ai.ingestion_queue', mesmo quando elas existem e o código/queries parecem corretos. Suspeita principal: problema de visibilidade transacional no PostgreSQL."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}

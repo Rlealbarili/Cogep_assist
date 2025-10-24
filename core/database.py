@@ -1,26 +1,31 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy import pool # Importar pool
+from typing import AsyncGenerator
 from .config import DATABASE_URL
 
 # Engine de conexão assíncrona
 async_engine = create_async_engine(
     DATABASE_URL,
-    echo=False,  # Mude para True para ver os comandos SQL gerados
+    echo=True,  # Ativado para debugging - mostrar comandos SQL no console
+    poolclass=pool.NullPool # Adicionar NullPool
 )
 
 # Fábrica de sessões assíncronas
 AsyncSessionFactory = async_sessionmaker(
     bind=async_engine,
     autoflush=False,
+    autocommit=False,
     expire_on_commit=False,
 )
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependência FastAPI para obter uma sessão de banco de dados.
-    Garante que a sessão seja sempre fechada após a requisição.
+    A sessão é criada diretamente e fechada no finally.
+    O gerenciamento de transação (commit/rollback) é responsabilidade do endpoint.
     """
-    async with AsyncSessionFactory() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+    session = AsyncSessionFactory()
+    try:
+        yield session
+    finally:
+        await session.close()
