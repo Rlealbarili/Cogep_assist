@@ -846,3 +846,37 @@ DOCS INICIAL COGEP_ASSIST_PURO
     "Conformidade LGPD"
   ]
 }
+
+{
+  "session_id": "COGEP-20251023-1155",
+  "last_step_completed": "Teste E2E (PTS-16) falhou. A correção 'NullPool' foi aplicada, mas o worker ainda loga 'No pending jobs found'.",
+  "current_objective": "Aplicar a correção de F-String (PTS-13) em 'worker_service/tasks.py' para resolver a falha de binding de parâmetro (WHERE status = NULL).",
+  "architecture_decisions": [
+    "Queries SQL brutas que usam bind parameters (:param) para colunas VARCHAR (que substituíram ENUMs) mostraram-se não confiáveis; usar f-strings para valores controlados."
+  ],
+  "open_issues": [
+    "A falha do worker é causada por dois problemas: 1) Visibilidade transacional (corrigida com 'NullPool'). 2) Falha de binding de parâmetro (WHERE status = NULL), a ser corrigida agora."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251023-1158",
+  "last_step_completed": "Aplicada a correção de F-String (PTS-17) em 'worker_service/tasks.py' para resolver a falha de binding de parâmetro.",
+  "current_objective": "Executar o teste E2E final (limpar DB, iniciar serviços, rodar 'test_ingest.py') e monitorar os logs do worker para validar a correção combinada (NullPool + F-String).",
+  "architecture_decisions": [
+    "Queries SQL brutas que usam bind parameters (:param) para colunas VARCHAR mostraram-se não confiáveis; usar f-strings para valores controlados."
+  ],
+  "open_issues": [
+    "Validando se a combinação de 'NullPool' e queries com f-strings resolve o problema do worker não encontrar jobs pendentes."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}

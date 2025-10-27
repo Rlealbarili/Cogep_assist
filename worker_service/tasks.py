@@ -117,9 +117,13 @@ async def claim_jobs_from_db(session):
         RETURNING id, source_uri, namespace;
     """)
     
+    print(">>> DEBUG: Entrou em claim_jobs_from_db <<<")
+    log.info(f"[WORKER DBG] Executando claim_query: {claim_query}")
     # Usa a transação da sessão passada
     result = await session.execute(claim_query)
     claimed_jobs = result.mappings().fetchall()
+    await session.commit() # Commit explícito após a reivindicação
+    log.info(f"[Worker] Committed {len(claimed_jobs)} claimed jobs.")
     return claimed_jobs
 
 async def update_job_status(session, job_id: int, status: IngestionStatus):
