@@ -1,0 +1,2 @@
+Navegue para https://example.com, chame browser_snapshot, e depois retorne o título da página usando browser_evaluate com:
+function: "() => document.title"

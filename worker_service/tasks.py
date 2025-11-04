@@ -27,9 +27,9 @@ async def process_jobs_logic():
 
         async with LocalAsyncSessionFactory() as session:
             async with session.begin(): # Iniciar a transação aqui
-                # 1. Reivindica os jobs (fora do loop de processamento)
-                claimed_jobs = await claim_jobs_from_db(session)
-                total_claimed = len(claimed_jobs) # Guarda o total antes do loop
+                # 1. Reivindica os jobs
+                claimed_jobs = await claim_jobs_from_db(session) # Esta função AGORA NÃO DÁ MAIS COMMIT
+                total_claimed = len(claimed_jobs)
                 
                 if not claimed_jobs:
                     log.info("--- [WORKER] No pending jobs found. ---")
@@ -43,9 +43,7 @@ async def process_jobs_logic():
                     source_uri = job['source_uri']
                     log.info(f"[Worker] Processing Job ID: {job_id}, URI: {source_uri}")
 
-                    # -- Bloco TRY/EXCEPT por Job --
                     try:
-                        # Tenta baixar
                         log.info(f"[Worker:{job_id}] Downloading content from {source_uri}...")
                         async with httpx.AsyncClient(timeout=30.0) as client:
                             response = await client.get(source_uri)
@@ -55,7 +53,6 @@ async def process_jobs_logic():
 
                         # TODO: Unstructured, Chunking, Embedding aqui
 
-                        # Marca como COMPLETED apenas se tudo deu certo
                         await update_job_status(session, job_id, IngestionStatus.COMPLETED)
                         log.info(f"[Worker:{job_id}] Marked Job ID as COMPLETED.")
                         jobs_processed_count += 1
@@ -68,20 +65,21 @@ async def process_jobs_logic():
                         await update_job_status(session, job_id, IngestionStatus.FAILED)
                     except Exception as e:
                         log.error(f"[Worker:{job_id}] An unexpected error occurred during processing for this job: {e}", exc_info=True)
-                        try: # Tenta marcar como FAILED mesmo se o erro foi inesperado
+                        try:
                             await update_job_status(session, job_id, IngestionStatus.FAILED)
                         except Exception as update_err:
                             log.error(f"[Worker:{job_id}] CRITICAL: Failed to even mark job as FAILED. Error: {update_err}", exc_info=True)
-                    # -- Fim do Bloco TRY/EXCEPT por Job --
+            
+            # O COMMIT de todas as atualizações de status (COMPLETED/FAILED)
+            # acontece automaticamente aqui, ao sair do 'async with session.begin()'
 
             return f"Processed {jobs_processed_count} of {total_claimed} claimed jobs."
     
     finally:
-        if engine: # Apenas dispose se o engine foi criado
+        if engine:
             await engine.dispose()
             log.info("[Worker] Engine e pool de conexão da tarefa descartados.")
 
-# --- As funções claim_jobs_from_db e update_job_status permanecem iguais ---
 
 @celery_app.task
 def poll_and_process_jobs():
@@ -93,20 +91,24 @@ def poll_and_process_jobs():
         return result
     except Exception as e:
         log.error(f"[WORKER ERROR] Erro fatal na tarefa: {e}", exc_info=True)
-        # Retorna falha para o Celery, mas a engine já foi disposed no finally
         return "Task execution failed critically."
 
 async def claim_jobs_from_db(session):
     """
     Conecta ao banco e atomicamente busca e marca até 5 jobs como 'PROCESSING'.
+    Usa o padrão CTE recomendado.
     """
+    
+    # --- CORREÇÃO AQUI ---
+    # Garante que estamos usando os valores MAIÚSCULOS do Enum
+    # Ex: IngestionStatus.PENDING.value == "PENDING"
+    
     pending_status_val = IngestionStatus.PENDING.value
     processing_status_val = IngestionStatus.PROCESSING.value
     
+    # A query f-string agora usará 'PENDING' e 'PROCESSING'
     claim_query = text(f"""
-        UPDATE ai.ingestion_queue
-        SET status = '{processing_status_val}', updated_at = NOW()
-        WHERE id IN (
+        WITH jobs_to_claim AS (
             SELECT id
             FROM ai.ingestion_queue
             WHERE status = '{pending_status_val}'
@@ -114,16 +116,23 @@ async def claim_jobs_from_db(session):
             LIMIT 5
             FOR UPDATE SKIP LOCKED
         )
-        RETURNING id, source_uri, namespace;
+        UPDATE ai.ingestion_queue
+        SET status = '{processing_status_val}', updated_at = NOW()
+        FROM jobs_to_claim
+        WHERE ai.ingestion_queue.id = jobs_to_claim.id
+        RETURNING ai.ingestion_queue.id, ai.ingestion_queue.source_uri, ai.ingestion_queue.namespace;
     """)
     
-    print(">>> DEBUG: Entrou em claim_jobs_from_db <<<")
-    log.info(f"[WORKER DBG] Executando claim_query: {claim_query}")
-    # Usa a transação da sessão passada
+    print(">>> DEBUG: Entrou em claim_jobs_from_db (com query CTE) <<<")
+    # Este log agora deve mostrar: "... WHERE status = 'PENDING' ..."
+    log.info(f"[WORKER DBG] Executando claim_query (CTE): {claim_query}")
+    
     result = await session.execute(claim_query)
     claimed_jobs = result.mappings().fetchall()
-    await session.commit() # Commit explícito após a reivindicação
-    log.info(f"[Worker] Committed {len(claimed_jobs)} claimed jobs.")
+    
+    # (O commit foi removido daqui, o que está correto)
+    
+    log.info(f"[Worker] Reivindicou {len(claimed_jobs)} jobs (aguardando commit externo).")
     return claimed_jobs
 
 async def update_job_status(session, job_id: int, status: IngestionStatus):

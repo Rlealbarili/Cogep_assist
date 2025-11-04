@@ -1,0 +1,8 @@
+# PRINCÍPIOS FUNDAMENTAIS DE AUTOMAÇÃO MCP
+1. Snapshot First: Sempre obtenha o snapshot (browser_snapshot) antes de interagir.
+2. String Literal: browser_evaluate EXIGE o parâmetro 'function' como STRING literal JavaScript pura.
+   - Exemplo CORRETO: "() => document.title".
+   - NUNCA use objetos aninhados ou 'undefined'.
+3. Robustez: Prefira 'element' descritivo sobre 'ref' específico (evita "Ref not found").
+4. Sequencial: Execute uma ação por vez, validando cada etapa.
+5. Fluxo de Debugging: Use browser_snapshot e browser_evaluate para inspecionar o estado da página no momento exato do erro.

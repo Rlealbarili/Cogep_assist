@@ -880,3 +880,285 @@ DOCS INICIAL COGEP_ASSIST_PURO
     "Conformidade LGPD"
   ]
 }
+
+{
+  "session_id": "COGEP-20251023-1345",
+  "last_step_completed": "Teste E2E (PTS-18) falhou. Worker ainda loga 'No pending jobs found', mesmo após correções de NullPool e (supostamente) F-String.",
+  "current_objective": "Verificar o conteúdo exato da função 'claim_jobs_from_db' em 'worker_service/tasks.py' para confirmar se a correção F-String (PTS-17) foi aplicada corretamente.",
+  "architecture_decisions": [
+    "Queries SQL brutas que usam bind parameters (:param) para colunas VARCHAR mostraram-se não confiáveis; usar f-strings para valores controlados."
+  ],
+  "open_issues": [
+    "Falha persistente do worker em encontrar jobs. Causa raiz incerta, mas suspeita recai sobre a implementação da query 'claim_jobs_from_db'."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251023-1358",
+  "last_step_completed": "Falha persistente do worker (PTS-18). Observação do 'TRUNCATE' (PTS-19) levantou suspeita sobre a persistência na API.",
+  "current_objective": "Aplicar instrumentação (logging detalhado e print de depuração) em 'ingestion_service/main.py' para verificar se o commit do banco de dados está ocorrendo com sucesso.",
+  "architecture_decisions": [
+    "Logging robusto em torno de operações críticas de banco de dados é essencial para diagnóstico."
+  ],
+  "open_issues": [
+    "Suspeita de falha silenciosa no commit do banco de dados dentro do endpoint '/ingest' da API, impedindo que jobs sejam persistidos."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251023-1400",
+  "last_step_completed": "Tentativa de teste E2E (PTS-18) falhou com erro de conexão, indicando que a API FastAPI não estava rodando.",
+  "current_objective": "Iniciar o servidor Uvicorn para 'ingestion_service' com logging INFO e tentar executar 'test_ingest.py' novamente.",
+  "architecture_decisions": [],
+  "open_issues": [
+    "API FastAPI ('ingestion_service') não estava em execução durante o teste E2E anterior."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251023-1410",
+  "last_step_completed": "Identificado 'ValueError' na inicialização do Uvicorn (PTS-21), indicando falha no carregamento da DATABASE_URL via .env/load_dotenv().",
+  "current_objective": "Gerar e instruir o usuário a executar os comandos de terminal para definir explicitamente a DATABASE_URL e então iniciar o Uvicorn.",
+  "architecture_decisions": [
+    "Adotar a definição explícita de DATABASE_URL via shell para iniciar o Uvicorn, mantendo load_dotenv() para outros contextos."
+  ],
+  "open_issues": [
+    "Uvicorn não consegue construir a DATABASE_URL corretamente a partir das variáveis carregadas via load_dotenv()."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251023-1420",
+  "last_step_completed": "Teste E2E (PTS-18) falhou novamente. Worker ainda loga 'No pending jobs found', indicando que a correção F-String (PTS-17) pode não ter sido aplicada corretamente ou é ineficaz.",
+  "current_objective": "Recuperar e inspecionar o código atual da função 'claim_jobs_from_db' em 'worker_service/tasks.py' para validar a implementação da correção F-String.",
+  "architecture_decisions": [
+    "Queries SQL brutas que usam bind parameters (:param) para colunas VARCHAR mostraram-se não confiáveis; usar f-strings para valores controlados."
+  ],
+  "open_issues": [
+    "Falha persistente do worker em encontrar jobs. A causa raiz ainda não foi confirmada, mas a implementação da query 'claim_jobs_from_db' é a principal suspeita."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251023-1605",
+  "last_step_completed": "Pesquisa externa ('compass_artifact_wf-...markdown.md') diagnosticou a causa raiz do commit silencioso (gerenciamento incorreto da AsyncSession em get_db e falta de expire_on_commit=False).",
+  "current_objective": "Aplicar as correções de código recomendadas pela pesquisa nos arquivos 'core/database.py' e 'ingestion_service/main.py'.",
+  "architecture_decisions": [
+    "Adotar o padrão corrigido para `get_db` e a configuração completa para `AsyncSessionFactory` como padrão para o projeto."
+  ],
+  "open_issues": [
+    "Falha silenciosa no commit do banco de dados dentro do endpoint '/ingest' da API impede que jobs sejam persistidos."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251023-1635",
+  "last_step_completed": "Logs do Uvicorn (PTS-24) revelaram um ROLLBACK inesperado no final da requisição, mesmo após o COMMIT explícito, identificando a causa raiz da falha de persistência.",
+  "current_objective": "Refatorar 'core/database.py' (simplificar get_db) e 'ingestion_service/main.py' (usar 'async with db.begin():') para implementar o gerenciamento explícito e correto da transação no escopo do endpoint.",
+  "architecture_decisions": [
+    "Adotar 'async with session.begin():' como padrão para gerenciamento de transações em endpoints FastAPI que modificam dados."
+  ],
+  "open_issues": [
+    "ROLLBACK automático no final do ciclo de vida da dependência 'get_db' está desfazendo os commits realizados no endpoint '/ingest'."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251023-1655",
+  "last_step_completed": "Correção do ROLLBACK na API (PTS-25) confirmada. API agora comita jobs com sucesso, mas worker ainda falha em encontrá-los ('No pending jobs found').",
+  "current_objective": "Adicionar logging em 'worker_service/tasks.py' para capturar e inspecionar a string SQL exata da query 'claim_jobs_from_db' executada pelo worker.",
+  "architecture_decisions": [
+    "Adotar 'async with session.begin():' como padrão para gerenciamento de transações em endpoints FastAPI que modificam dados."
+  ],
+  "open_issues": [
+    "Worker Celery não detecta jobs pendentes, apesar da API estar commitando-os corretamente e as correções de NullPool/f-string terem sido (supostamente) aplicadas. Suspeita: erro na string SQL final gerada/executada pelo worker."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251023-1705",
+  "last_step_completed": "Correção do ROLLBACK na API (PTS-25) validada. API comita com sucesso, mas worker (PTS-25 logs) ainda falha ('No pending jobs found').",
+  "current_objective": "Adicionar logging em 'worker_service/tasks.py' para capturar e inspecionar a string SQL exata da query 'claim_jobs_from_db' executada pelo worker (Reiteração do PTS-26).",
+  "architecture_decisions": [
+    "Adotar 'async with session.begin():' como padrão para gerenciamento de transações em endpoints FastAPI que modificam dados."
+  ],
+  "open_issues": [
+    "Worker Celery não detecta jobs pendentes, apesar da API estar commitando-os corretamente. Suspeita principal: erro na string SQL final gerada/executada pela query 'claim_jobs_from_db'."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251023-1720",
+  "last_step_completed": "Nova pesquisa ('compass_artifact_wf-...markdown.md') identificou transações aninhadas incorretas (autobegin + begin()) em 'worker_service/tasks.py' como a causa provável da falha persistente.",
+  "current_objective": "Aplicar a 'Solução 1' da pesquisa: remover 'session.begin()' de 'claim_jobs_from_db' e adicionar 'await session.commit()' explícito.",
+  "architecture_decisions": [
+    "Adotar o padrão de confiar no 'autobegin' da sessão principal do worker e usar 'await session.commit()' explícito após operações de modificação como o 'claim'."
+  ],
+  "open_issues": [
+    "Worker Celery não detecta jobs pendentes devido a conflito no gerenciamento de transações SQLAlchemy (autobegin vs begin())."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251024-1018",
+  "last_step_completed": "Correção de transação aninhada (PTS-27) aplicada. Worker executa e commita, mas ainda não encontra jobs ('Committed 0 claimed jobs').",
+  "current_objective": "Aplicar logging em 'worker_service/tasks.py' para capturar e inspecionar a string SQL exata da query 'claim_jobs_from_db' (Implementação do PTS-26).",
+  "architecture_decisions": [
+    "Adotar o padrão de confiar no 'autobegin' da sessão principal do worker e usar 'await session.commit()' explícito após operações de modificação como o 'claim'."
+  ],
+  "open_issues": [
+    "Worker Celery não detecta jobs pendentes. A query 'claim_jobs_from_db' está retornando 0 linhas, apesar dos jobs existirem. Causa raiz suspeita: erro na string SQL gerada."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251024-1031",
+  "last_step_completed": "Correção de transação aninhada (PTS-27) validada (commit explícito adicionado), mas worker ainda falha ('No pending jobs found').",
+  "current_objective": "Aplicar logging em 'worker_service/tasks.py' para capturar e inspecionar a string SQL exata da query 'claim_jobs_from_db' (Implementação do PTS-26/28).",
+  "architecture_decisions": [
+    "Adotar o padrão de confiar no 'autobegin' da sessão principal do worker e usar 'await session.commit()' explícito após operações de modificação como o 'claim'."
+  ],
+  "open_issues": [
+    "Worker Celery não detecta jobs pendentes, apesar da API estar commitando-os corretamente e as correções anteriores terem sido aplicadas. Suspeita principal: erro na string SQL final gerada/executada pela query 'claim_jobs_from_db'."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251024-1031",
+  "last_step_completed": "Correção de transação aninhada (PTS-27) validada (commit explícito adicionado), mas worker ainda falha ('No pending jobs found').",
+  "current_objective": "Aplicar logging em 'worker_service/tasks.py' para capturar e inspecionar a string SQL exata da query 'claim_jobs_from_db' (Implementação do PTS-26/28).",
+  "architecture_decisions": [
+    "Adotar o padrão de confiar no 'autobegin' da sessão principal do worker e usar 'await session.commit()' explícito após operações de modificação como o 'claim'."
+  ],
+  "open_issues": [
+    "Worker Celery não detecta jobs pendentes, apesar da API estar commitando-os corretamente e as correções anteriores terem sido aplicadas. Suspeita principal: erro na string SQL final gerada/executada pela query 'claim_jobs_from_db'."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251024-1040",
+  "last_step_completed": "Log da query SQL (PTS-28) não apareceu nos logs do worker (PTS-27 logs), indicando que a modificação pode não estar em efeito ou há um erro anterior.",
+  "current_objective": "Adicionar um 'print' statement em 'worker_service/tasks.py' antes do log da query para verificar se a função 'claim_jobs_from_db' está sendo executada.",
+  "architecture_decisions": [],
+  "open_issues": [
+    "A modificação para logar a query SQL exata não está refletida nos logs de execução do worker."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251024-1048",
+  "last_step_completed": "Adicionado 'print' em 'claim_jobs_from_db' (PTS-29), mas ele não apareceu nos logs, indicando que a função não está sendo executada.",
+  "current_objective": "Instruir o usuário a parar e reiniciar corretamente os processos Celery Worker e Celery Beat para verificar sua configuração e execução, e confirmar se o código atualizado está em uso.",
+  "architecture_decisions": [],
+  "open_issues": [
+    "A função 'claim_jobs_from_db' não está sendo chamada pela tarefa Celery 'poll_and_process_jobs'. Causa raiz suspeita: problema na execução/configuração do Celery Worker/Beat ou código desatualizado."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251024-1035",
+  "last_step_completed": "Log para capturar a query SQL exata ('claim_jobs_from_db') adicionado (PTS-28). Teste executado.",
+  "current_objective": "Analisar a string SQL da query 'claim_jobs_from_db' impressa no log '[WORKER DBG]' para identificar o erro que a impede de encontrar jobs pendentes.",
+  "architecture_decisions": [
+    "Adotar o padrão de confiar no 'autobegin' da sessão principal do worker e usar 'await session.commit()' explícito após operações de modificação como o 'claim'."
+  ],
+  "open_issues": [
+    "Worker Celery executa a função 'claim_jobs_from_db', mas a query UPDATE retorna 0 linhas, mesmo quando jobs 'pending' existem. A string SQL exata precisa ser inspecionada."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251027-1103",
+  "last_step_completed": "Verificado que 'claim_jobs_from_db' executa (print apareceu - PTS-29 validado), mas o log da query SQL está formatado incorretamente (PTS-28 pendente).",
+  "current_objective": "Corrigir a formatação da f-string no log '[WORKER DBG]' em 'worker_service/tasks.py' para capturar a query SQL exata.",
+  "architecture_decisions": [],
+  "open_issues": [
+    "Log de depuração da query SQL em 'claim_jobs_from_db' está imprimindo a variável literalmente ('{claim_query}') devido a erro de formatação (chaves duplas)."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
