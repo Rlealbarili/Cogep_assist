@@ -1,9 +1,17 @@
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+
 
 class IngestionRequest(BaseModel):
-    """
-    Define o corpo da requisição para o endpoint de ingestão.
-    """
-    source_uri: HttpUrl
+    source_uri: str
+    namespace: str = "default"
+
+
+class IngestionResponse(BaseModel):
+    id: int
+    source_uri: str
     namespace: str
-    metadata: dict | None = None
+    status: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None

@@ -1,0 +1,149 @@
+{
+  "project_metadata": {
+    "name": "cogep_assist",
+    "version": "1.0.0",
+    "architecture_pattern": "Microservices with Async Processing",
+    "deployment_model": "Containerized (Docker)",
+    "last_updated": "2025-10-22"
+  },
+  "technology_stack": {
+    "api_layer": {
+      "framework": "FastAPI",
+      "version": ">=0.104.0", 
+      "async_support": true,
+      "documentation": "Auto-generated OpenAPI"
+    },
+    "task_processing": {
+      "framework": "Celery",
+      "version": ">=5.3.0",
+      "broker": "Redis",
+      "result_backend": "Redis",
+      "concurrency_model": "asyncio"
+    },
+    "database_stack": {
+      "primary_db": "PostgreSQL 15+",
+      "orm": "SQLAlchemy (Async) >=2.0",
+      "vector_extension": "PGVector",
+      "migration_tool": "Alembic",
+      "enum_support": "alembic-postgresql-enum"
+    },
+    "external_integrations": {
+      "http_client": "httpx (async)",
+      "embedding_service": "OpenAI text-embedding-3-small",
+      "orchestration_reference": "N8N workflows"
+    }
+  },
+  "service_architecture": {
+    "ingestion_service": {
+      "role": "API Gateway & Job Queue Manager",
+      "performance_target": "< 200ms response time",
+      "responsibilities": [
+        "Request validation and sanitization",
+        "Job queuing in ai.ingestion_queue",
+        "Client authentication and rate limiting",
+        "Response formatting and error handling"
+      ],
+      "critical_files": {
+        "main.py": "FastAPI application and routing",
+        "schemas.py": "Pydantic request/response models",
+        "dependencies.py": "FastAPI dependency injection"
+      },
+      "endpoints": {
+        "POST /ingest": {
+          "purpose": "Primary ingestion endpoint",
+          "input_validation": "URL format, content-type, size limits",
+          "output": "Job ID and status tracking URL"
+        }
+      }
+    },
+    "worker_service": {
+      "role": "Asynchronous Heavy Processing Engine",
+      "polling_interval": "30 seconds",
+      "concurrency_model": "Single worker with async tasks",
+      "responsibilities": [
+        "Document download and content extraction", 
+        "Text chunking and embedding generation",
+        "Vector storage in PGVector",
+        "Status tracking and error recovery"
+      ],
+      "critical_files": {
+        "tasks.py": "Core Celery task implementations",
+        "processors/": "Document-specific processing logic",
+        "utils/": "Shared utilities and helpers"
+      },
+      "task_definitions": {
+        "poll_and_process_jobs": {
+          "schedule": "@periodic_task(run_every=30.0)",
+          "batch_processing": true,
+          "error_handling": "Individual job isolation"
+        }
+      }
+    }
+  },
+  "database_architecture": {
+    "schema_governance": {
+      "source_of_truth": "core/models.py",
+      "migration_strategy": "Alembic-only (NO create_all in production)",
+      "enum_management": "PostgreSQL native with SQLAlchemy mapping",
+      "connection_pooling": "AsyncSession per operation"
+    },
+    "schema_definitions": {
+      "ai_schema": {
+        "purpose": "AI/ML operations and document processing",
+        "tables": {
+          "ingestion_queue": {
+            "model_class": "IngestionQueue",
+            "primary_key": "id (UUID)",
+            "status_field": "status (IngestionStatus ENUM)",
+            "indexes": ["status", "created_at"],
+            "purpose": "Job queue with status tracking"
+          },
+          "rag_documents_1536": {
+            "model_class": "RagDocuments", 
+            "embedding_dimensions": 1536,
+            "vector_index": "HNSW for similarity search",
+            "purpose": "Document chunks with embeddings"
+          }
+        }
+      },
+      "crm_schema": {
+        "purpose": "Customer relationship and compliance management",
+        "tables": {
+          "clients": {
+            "model_class": "Clients",
+            "identification": "whatsapp_number (unique)",
+            "purpose": "WhatsApp user registry"
+          },
+          "consents": {
+            "model_class": "Consents",
+            "compliance": "LGPD requirements",
+            "purpose": "Consent tracking and management"
+          }
+        }
+      }
+    }
+  },
+  "integration_patterns": {
+    "n8n_orchestration": {
+      "role": "Reference implementation for business logic",
+      "key_workflows": {
+        "ingest_master_orchestrator.json": "End-to-end ingestion flow",
+        "ingest_one_document.json": "Single document processing",
+        "pgvector_retrieve.json": "RAG query implementation"
+      },
+      "migration_strategy": "Translate N8N logic to native Python/FastAPI"
+    }
+  },
+  "performance_constraints": {
+    "api_response_time": "< 200ms for ingestion endpoint",
+    "worker_throughput": "Process 100+ documents/hour",
+    "vector_search_latency": "< 100ms for similarity queries",
+    "concurrent_users": "Support 50+ simultaneous API requests"
+  },
+  "operational_requirements": {
+    "logging": "Structured JSON logging with correlation IDs",
+    "monitoring": "Health checks for all services",
+    "error_recovery": "Automatic retry with exponential backoff",
+    "scalability": "Horizontal scaling for worker_service"
+  }
+}

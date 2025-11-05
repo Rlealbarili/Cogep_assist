@@ -1,0 +1,200 @@
+{
+  "session_metadata": {
+    "session_id": "COGEP_ASSIST_CONTEXT_v2.0",
+    "knowledge_base_version": "2025.10.22",
+    "context_engineering_level": "Advanced",
+    "last_validation": "2025-10-22T10:33:00-03:00"
+  },
+  "mvp_objectives": {
+    "primary_features": [
+      "RAG-powered question answering",
+      "Client/ticket CRM integration", 
+      "LGPD compliance automation"
+    ],
+    "success_metrics": {
+      "rag_accuracy": "> 85% relevant responses",
+      "api_availability": "> 99.5% uptime",
+      "compliance_coverage": "100% consent tracking"
+    }
+  },
+  "architectural_decisions": {
+    "service_separation": {
+      "id": "AD-001",
+      "decision": "Strict separation: FastAPI for rapid response, Celery for heavy processing",
+      "rationale": "Maintain API responsiveness under load",
+      "implementation_pattern": "Producer-Consumer with Redis queue",
+      "files_affected": ["ingestion_service/main.py", "worker_service/tasks.py"],
+      "validation_criteria": "API response < 200ms, worker handles 100+ docs/hour",
+      "status": "IMPLEMENTED_AND_VALIDATED"
+    },
+    "data_model_governance": {
+      "id": "AD-002", 
+      "decision": "Single Source of Truth: core/models.py for all ORM definitions",
+      "rationale": "Prevent schema drift and model inconsistencies",
+      "enforcement_rules": [
+        "NO model definitions outside core/models.py",
+        "Pydantic schemas derive from ORM models",
+        "All DB changes via Alembic migrations"
+      ],
+      "files_affected": ["core/models.py"],
+      "status": "IMPLEMENTED_AND_VALIDATED"
+    },
+    "schema_organization": {
+      "id": "AD-003",
+      "decision": "Service-specific Pydantic schemas in respective service modules",
+      "rationale": "Encapsulation and service autonomy",
+      "pattern": "ingestion_service/schemas.py, worker_service/schemas.py",
+      "files_affected": ["*/schemas.py"],
+      "status": "IMPLEMENTED_AND_VALIDATED"
+    },
+    "migration_strategy": {
+      "id": "AD-004",
+      "decision": "Alembic-only for production deployments, eliminate init_db.py create_all",
+      "rationale": "Controlled, versioned, reversible schema changes",
+      "required_packages": ["alembic", "alembic-postgresql-enum"],
+      "files_affected": ["alembic/env.py", "alembic.ini", "requirements.txt"],
+      "status": "IMPLEMENTED_AND_VALIDATED"
+    }
+  },
+  "critical_failure_patterns": {
+    "sqlalchemy_interface_error": {
+      "id": "PATTERN-001",
+      "error_signature": "sqlalchemy.exc.InterfaceError: another operation is in progress",
+      "root_cause_analysis": {
+        "primary": "Conflicting asyncio.run() with global connection pools",
+        "secondary": "Celery worker thread model incompatibility",
+        "context": "SQLAlchemy async sessions in Celery context"
+      },
+      "proven_solution": {
+        "approach": "Engine-per-task pattern with proper disposal",
+        "implementation": [
+          "Create local async_engine in each task",
+          "Use dedicated AsyncSession per operation", 
+          "ALWAYS call engine.dispose() in finally block",
+          "Avoid global connection pools in worker context"
+        ],
+        "code_pattern": "async with AsyncSession(engine) as session: ... finally: await engine.dispose()"
+      },
+      "files_affected": ["worker_service/tasks.py"],
+      "prevention_checklist": [
+        "No global AsyncSessionFactory in workers",
+        "Engine disposal in finally blocks",
+        "Separate engine per heavy task"
+      ]
+    },
+    "enum_type_mismatch": {
+      "id": "PATTERN-002", 
+      "error_signature": "sqlalchemy.exc.DBAPIError: invalid input value for enum",
+      "root_cause_analysis": {
+        "primary": "Python Enum values vs PostgreSQL ENUM type mismatch",
+        "secondary": "SQLAlchemy enum handling with schemas",
+        "context": "Cross-schema enum operations"
+      },
+      "proven_solution": {
+        "orm_configuration": "Enum(IngestionStatus, schema='ai', native_enum=False)",
+        "raw_query_pattern": "CAST(:param AS ai.ingestionstatus)",
+        "validation_rules": [
+          "Always specify schema in Enum definition",
+          "Use native_enum=False for cross-schema compatibility",
+          "Cast parameters in raw SQL operations"
+        ]
+      },
+      "files_affected": ["core/models.py", "worker_service/tasks.py"],
+      "prevention_checklist": [
+        "Schema-aware enum definitions",
+        "Explicit casting in raw queries", 
+        "Test enum operations across schemas"
+      ]
+    },
+    "schema_inheritance_failure": {
+      "id": "PATTERN-003",
+      "error_signature": "sqlalchemy.exc.ProgrammingError: type does not exist", 
+      "root_cause_analysis": {
+        "primary": "Enum schema inheritance from __table_args__ not automatic",
+        "secondary": "PostgreSQL schema resolution order",
+        "context": "Multi-schema database with custom types"
+      },
+      "proven_solution": {
+        "explicit_schema": "Always specify schema='ai' in Enum constructor",
+        "no_inheritance": "Do not rely on __table_args__ schema inheritance",
+        "validation": "Test enum creation in isolation"
+      },
+      "files_affected": ["core/models.py"],
+      "prevention_checklist": [
+        "Explicit schema in all custom types",
+        "Independent type definitions",
+        "Schema-aware testing"
+      ]
+    },
+    "celery_concurrency_incompatibility": {
+      "id": "PATTERN-004",
+      "error_signature": "ValueError: not enough values to unpack (Windows)",
+      "root_cause_analysis": {
+        "primary": "Default prefork pool incompatible with Windows",
+        "secondary": "Process forking limitations on Windows",
+        "context": "Development environment setup"
+      },
+      "proven_solution": {
+        "windows_development": "celery -A worker_service.tasks worker -P solo",
+        "production_linux": "Standard prefork pool acceptable",
+        "testing": "Use solo pool for consistent behavior"
+      },
+      "files_affected": ["(command line configuration)"],
+      "prevention_checklist": [
+        "Platform-specific worker configuration",
+        "Document dev vs prod differences",
+        "Consistent testing environment"
+      ]
+    },
+    "redis_connectivity_context": {
+      "id": "PATTERN-005",
+      "error_signature": "consumer: Cannot connect to redis://redis:6379/0",
+      "root_cause_analysis": {
+        "primary": "Docker service name vs localhost resolution",
+        "secondary": "Development vs containerized environment",
+        "context": "Mixed deployment scenarios"
+      },
+      "proven_solution": {
+        "environment_aware": "Different .env for dev/docker/prod",
+        "dev_config": "localhost:6379 for local development",
+        "docker_config": "redis:6379 for containerized",
+        "validation": "Test connectivity in target environment"
+      },
+      "files_affected": [".env", "core/config.py"],
+      "prevention_checklist": [
+        "Environment-specific configuration",
+        "Connection validation at startup",
+        "Clear documentation for setup"
+      ]
+    }
+  },
+  "performance_insights": {
+    "database_optimization": {
+      "connection_pooling": "Async pool size: 20, max_overflow: 0",
+      "query_optimization": "Use indexes for status and timestamp queries",
+      "vector_search": "HNSW index for embedding similarity"
+    },
+    "celery_optimization": {
+      "prefetch_multiplier": 1,
+      "task_acks_late": true,
+      "worker_max_tasks_per_child": 1000
+    }
+  },
+  "context_validation_rules": {
+    "architectural_consistency": [
+      "Verify service separation boundaries",
+      "Validate async/sync context appropriateness",
+      "Check schema and model alignment"
+    ],
+    "error_prevention": [
+      "Apply learned failure patterns",
+      "Validate environment-specific configurations",
+      "Ensure proper resource disposal"
+    ],
+    "implementation_quality": [
+      "Structured logging with correlation IDs",
+      "Comprehensive error handling",
+      "Performance monitoring points"
+    ]
+  }
+}

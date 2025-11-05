@@ -1,152 +1,223 @@
 import asyncio
+import hashlib
+from datetime import datetime
+import os
 import logging
-import httpx # Certifique-se que o import está no topo
-from sqlalchemy import text, pool # Importar pool
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from core.celery_app import celery_app
-from core.models import IngestionStatus
-from core.config import DATABASE_URL
-# from core.database import AsyncSessionFactory # Removido, pois será criado localmente
+from sqlalchemy import pool
 
+import httpx
+import openai
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+
+from celery import Celery
+import os
+from core.config import DATABASE_URL
+from core.models import IngestionQueue, RagDocuments1536
+
+# Configuração do logger
 log = logging.getLogger(__name__)
 
-async def process_jobs_logic():
-    log.info("--- [WORKER] Polling for pending jobs... ---")
-    
-    claimed_jobs = [] # Inicializa fora do try/finally
-    jobs_processed_count = 0
-    total_claimed = 0
+# Inicialização do Celery
+celery_app = Celery('worker')
 
-    engine = None # Inicializar engine fora do try para garantir que esteja disponível no finally
+# Configuração do Celery
+celery_app.conf.update(
+    broker_url='redis://localhost:6379/0',
+    result_backend='redis://localhost:6379/0',
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+    timezone='UTC',
+    enable_utc=True,
+    worker_hijack_root_logger=False,
+    worker_log_format='[%(asctime)s: %(levelname)s/%(processName)s] %(message)s',
+    worker_task_log_format='[%(asctime)s: %(levelname)s/%(processName)s][%(task_name)s(%(task_id)s)] %(message)s'
+)
+
+# Função auxiliar para chamada da API de parsing Unstructured
+async def call_unstructured_api(content: bytes) -> str:
+    """
+    Faz chamada à API de parsing do Unstructured para obter o conteúdo textual do documento
+    """
+    # Implementação do parsing com Unstructured Client
+    # Ajuste conforme a documentação oficial do unstructured-client
+    # Por enquanto, retornando o conteúdo como string (isso deve ser substituído pela implementação real)
+    return content.decode('utf-8', errors='ignore')
+
+
+# Função auxiliar para chamada da API de embeddings OpenAI
+async def call_openai_embedding(content: str) -> list:
+    """
+    Faz chamada à API de embeddings do OpenAI para gerar o embedding do conteúdo
+    """
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        raise Exception("OPENAI_API_KEY não encontrada nas variáveis de ambiente")
+    
+    client = openai.AsyncOpenAI(api_key=openai_api_key)
+    
+    response = await client.embeddings.create(
+        input=content,
+        model="text-embedding-3-small"  # Ou outro modelo de sua escolha
+    )
+    
+    return response.data[0].embedding
+
+
+@celery_app.task(name='tasks.process_ingestion_job')
+def process_ingestion_job(job_id: int):
+    # Executar a lógica assíncrona dentro de um loop de eventos
+    import asyncio
+    return asyncio.run(_process_ingestion_job_async(job_id))
+
+
+async def _process_ingestion_job_async(job_id: int):
+    """
+    Tarefa principal do worker para processar um job de ingestão.
+    Aplica o Engine-per-task (PATTERN-001) para gerenciar a conexão com o banco.
+    """
+    engine = None
     try:
+        # PATTERN-001: Criar engine e sessionmaker locais para esta tarefa
         engine = create_async_engine(
             DATABASE_URL,
-            poolclass=pool.NullPool # Configurar NullPool aqui
+            echo=True,
+            poolclass=pool.NullPool
         )
-        LocalAsyncSessionFactory = async_sessionmaker(engine, expire_on_commit=False)
+        session_maker = async_sessionmaker(
+            bind=engine,
+            autoflush=False,
+            autocommit=False,
+            expire_on_commit=False,
+        )
 
-        async with LocalAsyncSessionFactory() as session:
-            async with session.begin(): # Iniciar a transação aqui
-                # 1. Reivindica os jobs
-                claimed_jobs = await claim_jobs_from_db(session) # Esta função AGORA NÃO DÁ MAIS COMMIT
-                total_claimed = len(claimed_jobs)
-                
-                if not claimed_jobs:
-                    log.info("--- [WORKER] No pending jobs found. ---")
-                    return "No jobs to process."
+        async with session_maker() as session:
+            # Buscar o job no banco
+            job = await session.get(IngestionQueue, job_id)
+            if not job:
+                log.warning(f"Job com ID {job_id} não encontrado")
+                return
 
-                log.info(f"--- [WORKER] Claimed {total_claimed} jobs. ---")
-
-                # 2. Processa cada job DENTRO do loop com try/except individual
-                for job in claimed_jobs:
-                    job_id = job['id']
-                    source_uri = job['source_uri']
-                    log.info(f"[Worker] Processing Job ID: {job_id}, URI: {source_uri}")
-
-                    try:
-                        log.info(f"[Worker:{job_id}] Downloading content from {source_uri}...")
-                        async with httpx.AsyncClient(timeout=30.0) as client:
-                            response = await client.get(source_uri)
-                            response.raise_for_status()
-                            document_content = response.text
-                        log.info(f"[Worker:{job_id}] Download successful. Content length: {len(document_content)} bytes.")
-
-                        # TODO: Unstructured, Chunking, Embedding aqui
-
-                        await update_job_status(session, job_id, IngestionStatus.COMPLETED)
-                        log.info(f"[Worker:{job_id}] Marked Job ID as COMPLETED.")
-                        jobs_processed_count += 1
-
-                    except httpx.HTTPStatusError as e:
-                        log.error(f"[Worker:{job_id}] Failed to download {source_uri}. Status code: {e.response.status_code}")
-                        await update_job_status(session, job_id, IngestionStatus.FAILED)
-                    except httpx.RequestError as e:
-                        log.error(f"[Worker:{job_id}] Failed to connect to {source_uri}. Error: {e}")
-                        await update_job_status(session, job_id, IngestionStatus.FAILED)
-                    except Exception as e:
-                        log.error(f"[Worker:{job_id}] An unexpected error occurred during processing for this job: {e}", exc_info=True)
-                        try:
-                            await update_job_status(session, job_id, IngestionStatus.FAILED)
-                        except Exception as update_err:
-                            log.error(f"[Worker:{job_id}] CRITICAL: Failed to even mark job as FAILED. Error: {update_err}", exc_info=True)
+            log.info(f"Processando job {job.id} de {job.source_uri}")
             
-            # O COMMIT de todas as atualizações de status (COMPLETED/FAILED)
-            # acontece automaticamente aqui, ao sair do 'async with session.begin()'
+            # Atualizar status para PROCESSING
+            job.status = 'PROCESSING'
+            await session.commit()
+            
+            # Download do conteúdo
+            async with httpx.AsyncClient() as client:
+                response = await client.get(job.source_uri)
+                if response.status_code != 200:
+                    raise Exception(f"Falha no download: {response.status_code}")
+                
+                doc_content = response.content
 
-            return f"Processed {jobs_processed_count} of {total_claimed} claimed jobs."
-    
+            # Parsing do conteúdo
+            parsed_content = await call_unstructured_api(doc_content)
+
+            # Geração do hash SHA256
+            content_sha = hashlib.sha256(parsed_content.encode()).hexdigest()
+
+            # Gerar embedding
+            embedding = await call_openai_embedding(parsed_content)
+
+            # Salvar no RAG DB
+            new_doc = RagDocuments1536(
+                namespace=job.namespace,
+                content=parsed_content,
+                content_sha256=content_sha,
+                embedding=embedding,
+                document_metadata={'source_uri': job.source_uri}
+            )
+            
+            session.add(new_doc)
+            
+            # Atualizar status para COMPLETED
+            job.status = 'COMPLETED'
+            job.updated_at = datetime.utcnow()
+            
+            await session.commit()
+            log.info(f"Job {job.id} processado com sucesso")
+
+    except Exception as e:
+        log.error(f"Erro ao processar job {job_id}: {str(e)}", exc_info=True)
+        
+        # Em caso de erro, criar nova sessão para atualizar o status
+        if engine:
+            async with async_sessionmaker(bind=engine)() as error_session:
+                job = await error_session.get(IngestionQueue, job_id)
+                if job:
+                    job.status = 'FAILED'
+                    job.processing_log = str(e)
+                    job.updated_at = datetime.utcnow()
+                    await error_session.commit()
     finally:
+        # PATTERN-001: Dispor do engine para liberar recursos
         if engine:
             await engine.dispose()
-            log.info("[Worker] Engine e pool de conexão da tarefa descartados.")
 
 
-@celery_app.task
-def poll_and_process_jobs():
+@celery_app.task(name='tasks.schedule_job_processor')
+def schedule_job_processor():
+    # Executar a lógica assíncrona dentro de um loop de eventos
+    import asyncio
+    return asyncio.run(_schedule_job_processor_async())
+
+
+async def _schedule_job_processor_async():
     """
-    Tarefa periódica (síncrona) que chama a lógica assíncrona.
+    Tarefa agendada para buscar e agendar jobs de ingestão.
+    Implementa o 'Feeder' que verifica por novos jobs.
     """
+    engine = None
     try:
-        result = asyncio.run(process_jobs_logic())
-        return result
-    except Exception as e:
-        log.error(f"[WORKER ERROR] Erro fatal na tarefa: {e}", exc_info=True)
-        return "Task execution failed critically."
-
-async def claim_jobs_from_db(session):
-    """
-    Conecta ao banco e atomicamente busca e marca até 5 jobs como 'PROCESSING'.
-    Usa o padrão CTE recomendado.
-    """
-    
-    # --- CORREÇÃO AQUI ---
-    # Garante que estamos usando os valores MAIÚSCULOS do Enum
-    # Ex: IngestionStatus.PENDING.value == "PENDING"
-    
-    pending_status_val = IngestionStatus.PENDING.value
-    processing_status_val = IngestionStatus.PROCESSING.value
-    
-    # A query f-string agora usará 'PENDING' e 'PROCESSING'
-    claim_query = text(f"""
-        WITH jobs_to_claim AS (
-            SELECT id
-            FROM ai.ingestion_queue
-            WHERE status = '{pending_status_val}'
-            ORDER BY created_at
-            LIMIT 5
-            FOR UPDATE SKIP LOCKED
+        # PATTERN-001: Criar engine e sessionmaker locais para esta tarefa
+        engine = create_async_engine(
+            DATABASE_URL,
+            echo=True,
+            poolclass=pool.NullPool
         )
-        UPDATE ai.ingestion_queue
-        SET status = '{processing_status_val}', updated_at = NOW()
-        FROM jobs_to_claim
-        WHERE ai.ingestion_queue.id = jobs_to_claim.id
-        RETURNING ai.ingestion_queue.id, ai.ingestion_queue.source_uri, ai.ingestion_queue.namespace;
-    """)
-    
-    print(">>> DEBUG: Entrou em claim_jobs_from_db (com query CTE) <<<")
-    # Este log agora deve mostrar: "... WHERE status = 'PENDING' ..."
-    log.info(f"[WORKER DBG] Executando claim_query (CTE): {claim_query}")
-    
-    result = await session.execute(claim_query)
-    claimed_jobs = result.mappings().fetchall()
-    
-    # (O commit foi removido daqui, o que está correto)
-    
-    log.info(f"[Worker] Reivindicou {len(claimed_jobs)} jobs (aguardando commit externo).")
-    return claimed_jobs
+        session_maker = async_sessionmaker(
+            bind=engine,
+            autoflush=False,
+            autocommit=False,
+            expire_on_commit=False,
+        )
 
-async def update_job_status(session, job_id: int, status: IngestionStatus):
+        async with session_maker() as session:
+            # Reivindicar atomicamente um job pendente
+            result = await session.execute(
+                select(IngestionQueue)
+                .filter(IngestionQueue.status == 'PENDING')
+                .limit(1)
+                .with_for_update(skip_locked=True)
+            )
+            job = result.scalar_one_or_none()
+
+            if job:
+                # Atualizar status para PROCESSING
+                job.status = 'PROCESSING'
+                await session.commit()
+                
+                # Agendar o processamento do job
+                process_ingestion_job.delay(job.id)
+                log.info(f"Job {job.id} reivindicado e agendado para processamento")
+
+    except Exception as e:
+        log.error(f"Erro ao agendar processamento de job: {str(e)}", exc_info=True)
+    finally:
+        # PATTERN-001: Dispor do engine para liberar recursos
+        if engine:
+            await engine.dispose()
+
+
+# Configurar o Celery Beat para agendar tarefas periódicas
+@celery_app.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
     """
-    Atualiza o status de um job específico.
+    Configura tarefas periódicas para o Celery Beat
     """
-    status_val = status.value
-    update_query = text(f"""
-        UPDATE ai.ingestion_queue
-        SET status = '{status_val}', updated_at = NOW()
-        WHERE id = :job_id
-    """)
-    # Usa a transação da sessão passada
-    await session.execute(
-        update_query,
-        {"job_id": job_id}
-    )
+    # Agendar o schedule_job_processor para rodar a cada 10 segundos
+    sender.add_periodic_task(10.0, schedule_job_processor.s(), name='check for new jobs')

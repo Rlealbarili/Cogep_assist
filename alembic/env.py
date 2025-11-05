@@ -76,7 +76,7 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
 
-    # Necessário para autogenerate detectar corretamente o schema do Enum
+    # Necessário para autogenerate detectar corretamente os schemas
     target_metadata.naming_convention = {
         "ix": "ix_%(column_0_label)s",
         "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -84,9 +84,6 @@ def run_migrations_online() -> None:
         "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
         "pk": "pk_%(table_name)s",
     }
-    # Inclui o schema 'ai' para que o Enum seja encontrado
-    if target_metadata.schema is None:
-         target_metadata.schema = 'ai'
 
     with connectable.connect() as connection:
         context.configure(

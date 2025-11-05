@@ -14,13 +14,14 @@ celery_app.conf.update(
     task_track_started=True,
     timezone='UTC',
     enable_utc=True,
+    worker_pool='solo',  # Usar pool solo para suporte adequado a tarefas assíncronas em Windows
 )
 
 # Configuração do Celery Beat (Agendador de Tarefas)
-# Vamos configurar uma tarefa para rodar a cada 30 segundos
+# Vamos configurar uma tarefa para rodar a cada 10 segundos
 celery_app.conf.beat_schedule = {
-    'poll-ingestion-queue-every-30-seconds': {
-        'task': 'worker_service.tasks.poll_and_process_jobs',
-        'schedule': 30.0,  # Em segundos
+    'schedule-job-processor-every-10-seconds': {
+        'task': 'tasks.schedule_job_processor',
+        'schedule': 10.0,  # Em segundos
     },
 }

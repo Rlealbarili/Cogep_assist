@@ -13,6 +13,7 @@ redis
 # --- APIs Externas ---
 httpx
 openai
+unstructured-client
 # --- NLP/Tokenização ---
 tiktoken
 

@@ -7,6 +7,9 @@ load_dotenv()
 # Busca a URL do banco de dados do ambiente, com um valor padrão para segurança
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost/db")
 
+# --- Configurações do OpenAI ---
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
 # --- Configurações do Celery ---
 # URL para o Broker (onde as tarefas são enviadas)
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")

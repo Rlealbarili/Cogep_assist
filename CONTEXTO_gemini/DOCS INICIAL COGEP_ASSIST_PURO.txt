@@ -1162,3 +1162,26 @@ DOCS INICIAL COGEP_ASSIST_PURO
   ]
 }
 
+### QWEN3 CODER ASSUMIU O PROJETO APARTIR DAQUI ###
+
+{
+  "session_id": "COGEP-20251104-095901",
+  "last_step_completed": "Sincronizar os modelos SQLAlchemy (core/models.py) com a estrutura real do banco de dados e 'carimbar' (stamp) o Alembic para refletir o estado atual.",
+  "current_objective": "Implementar o endpoint de ingestão (API Layer) para popular 'ai.ingestion_queue'.",
+  "architecture_decisions": [
+    "A estrutura de dados RAG está desnormalizada (documento, chunk e embedding na mesma tabela: `rag_documents_1536`).",
+    "A arquitetura API/Worker (AD-001) é implementada via tabela `ai.ingestion_queue`."
+  ],
+  "open_issues": [
+    "O banco de dados usa `varchar` para colunas de status, apresentando risco de falha de Enum (PATTERN-002). Agendar refatoração para Enums nativos do PG.",
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD e precisa ser atualizada para refletir as tabelas `ingestion_queue` e `rag_documents_1536`."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+
+
