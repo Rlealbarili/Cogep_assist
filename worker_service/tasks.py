@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import insert
 from celery import Celery
 import os
 from core.config import DATABASE_URL
-from core.models import IngestionQueue, RagDocuments1536
+from core.models import IngestionQueue, RagDocuments1536, PyIngestionStatus
 
 # Configuração do logger
 log = logging.getLogger(__name__)
@@ -37,14 +37,40 @@ celery_app.conf.update(
 )
 
 # Função auxiliar para chamada da API de parsing Unstructured
-async def call_unstructured_api(content: bytes) -> str:
+async def call_unstructured_api(content: bytes, filename: str = "document") -> str:
     """
     Faz chamada à API de parsing do Unstructured para obter o conteúdo textual do documento
     """
-    # Implementação do parsing com Unstructured Client
-    # Ajuste conforme a documentação oficial do unstructured-client
-    # Por enquanto, retornando o conteúdo como string (isso deve ser substituído pela implementação real)
-    return content.decode('utf-8', errors='ignore')
+    unstructured_api_url = os.getenv("UNSTRUCTURED_API_URL")
+    if not unstructured_api_url:
+        raise Exception("UNSTRUCTURED_API_URL não encontrada nas variáveis de ambiente")
+    
+    files = {'files': (filename, content)}
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(f"{unstructured_api_url}/general/v0/general", files=files)
+            response.raise_for_status() # Lança exceção para erros HTTP (4xx, 5xx)
+            parsed_elements = response.json()
+            # Processar 'parsed_elements' para extrair e concatenar o texto
+            full_text = "\n\n".join([element.get("text", "") for element in parsed_elements])
+            
+            # Garantir que o texto retornado está em formato UTF-8
+            # para evitar problemas de codificação nos estágios subsequentes
+            if isinstance(full_text, str):
+                full_text = full_text.encode('utf-8', errors='replace').decode('utf-8')
+            else:
+                full_text = str(full_text, 'utf-8', errors='replace')
+            
+            return full_text
+        except httpx.HTTPStatusError as e:
+            log.error(f"Erro HTTP ao chamar Unstructured API: {e.response.status_code} - {e.response.text}", exc_info=True)
+            raise Exception(f"Erro HTTP ao chamar Unstructured API: {e.response.status_code}")
+        except UnicodeDecodeError as e:
+            log.error(f"Erro de decodificação ao processar com Unstructured API: {e}", exc_info=True)
+            raise Exception(f"Erro de decodificação ao processar com Unstructured API: {e}")
+        except Exception as e:
+            log.error(f"Erro ao processar com Unstructured API: {e}", exc_info=True)
+            raise Exception(f"Erro ao processar com Unstructured API: {e}")
 
 
 # Função auxiliar para chamada da API de embeddings OpenAI
@@ -103,7 +129,7 @@ async def _process_ingestion_job_async(job_id: int):
             log.info(f"Processando job {job.id} de {job.source_uri}")
             
             # Atualizar status para PROCESSING
-            job.status = 'PROCESSING'
+            job.status = PyIngestionStatus.PROCESSING
             await session.commit()
             
             # Download do conteúdo
@@ -115,18 +141,23 @@ async def _process_ingestion_job_async(job_id: int):
                 doc_content = response.content
 
             # Parsing do conteúdo
-            parsed_content = await call_unstructured_api(doc_content)
+            # Extrair o nome do arquivo da URI para passar para a API do Unstructured
+            filename = job.source_uri.split('/')[-1] or "document"
+            parsed_content = await call_unstructured_api(doc_content, filename)
 
-            # Geração do hash SHA256
-            content_sha = hashlib.sha256(parsed_content.encode()).hexdigest()
+            # Geração do hash SHA256 - garantir codificação UTF-8
+            content_sha = hashlib.sha256(parsed_content.encode('utf-8', errors='replace')).hexdigest()
 
-            # Gerar embedding
+            # Gerar embedding - garantir que o conteúdo é uma string válida
             embedding = await call_openai_embedding(parsed_content)
+
+            # Garantir que o conteúdo a ser salvo está em formato seguro
+            safe_content = parsed_content.encode('utf-8', errors='replace').decode('utf-8')
 
             # Salvar no RAG DB
             new_doc = RagDocuments1536(
                 namespace=job.namespace,
-                content=parsed_content,
+                content=safe_content,
                 content_sha256=content_sha,
                 embedding=embedding,
                 document_metadata={'source_uri': job.source_uri}
@@ -135,7 +166,7 @@ async def _process_ingestion_job_async(job_id: int):
             session.add(new_doc)
             
             # Atualizar status para COMPLETED
-            job.status = 'COMPLETED'
+            job.status = PyIngestionStatus.COMPLETED
             job.updated_at = datetime.utcnow()
             
             await session.commit()
@@ -149,8 +180,10 @@ async def _process_ingestion_job_async(job_id: int):
             async with async_sessionmaker(bind=engine)() as error_session:
                 job = await error_session.get(IngestionQueue, job_id)
                 if job:
-                    job.status = 'FAILED'
-                    job.processing_log = str(e)
+                    job.status = PyIngestionStatus.FAILED
+                    # Garantir que a mensagem de erro também é segura em termos de codificação
+                    error_message = str(e).encode('utf-8', errors='replace').decode('utf-8')
+                    job.processing_log = error_message
                     job.updated_at = datetime.utcnow()
                     await error_session.commit()
     finally:
@@ -190,7 +223,7 @@ async def _schedule_job_processor_async():
             # Reivindicar atomicamente um job pendente
             result = await session.execute(
                 select(IngestionQueue)
-                .filter(IngestionQueue.status == 'PENDING')
+                .filter(IngestionQueue.status == PyIngestionStatus.PENDING)
                 .limit(1)
                 .with_for_update(skip_locked=True)
             )
@@ -198,7 +231,7 @@ async def _schedule_job_processor_async():
 
             if job:
                 # Atualizar status para PROCESSING
-                job.status = 'PROCESSING'
+                job.status = PyIngestionStatus.PROCESSING
                 await session.commit()
                 
                 # Agendar o processamento do job

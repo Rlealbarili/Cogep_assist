@@ -4,9 +4,9 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from datetime import datetime
 import logging
 
-from .schemas import IngestionRequest, IngestionResponse
+from ingestion_service.schemas import IngestionRequest, IngestionResponse
 from core.database import get_db
-from core.models import IngestionQueue
+from core.models import IngestionQueue, PyIngestionStatus
 
 log = logging.getLogger(__name__)
 
@@ -29,11 +29,11 @@ async def create_ingestion_job(
     Endpoint para criar uma nova tarefa de ingestão.
     Apenas insere na tabela 'ai.ingestion_queue' e retorna imediatamente.
     """
-    # Cria uma nova instância de IngestionQueue com status inicial 'PENDING'
+    # Cria uma nova instância de IngestionQueue com status inicial PyIngestionStatus.PENDING
     new_job = IngestionQueue(
         source_uri=request_data.source_uri,
         namespace=request_data.namespace,
-        status='PENDING'
+        status=PyIngestionStatus.PENDING
     )
 
     try:

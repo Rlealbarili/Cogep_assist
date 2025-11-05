@@ -1,200 +1,56 @@
 {
-  "session_metadata": {
-    "session_id": "COGEP_ASSIST_CONTEXT_v2.0",
-    "knowledge_base_version": "2025.10.22",
-    "context_engineering_level": "Advanced",
-    "last_validation": "2025-10-22T10:33:00-03:00"
+  "session_id": "cogep_assist_resolution_2025_11_05",
+  "timestamp": "2025-11-05T19:15:00Z",
+  "participants": ["User", "Anatoly Petrovich (Assistant)"],
+  "context": {
+    "project": "COGEP Assistente",
+    "objective": "Corrigir o erro 'CharacterNotInRepertoireError' / 'Erro ao processar com Unstructured API' (PATTERN-003) no 'process_ingestion_job'",
+    "technical_requirements": "Unstructured-client, OpenAI, hashlib",
+    "architecture_placement": "worker_service/tasks.py",
+    "previous_context": "Resolução de problema de importação relativa circular em ingestion_service/main.py"
   },
-  "mvp_objectives": {
-    "primary_features": [
-      "RAG-powered question answering",
-      "Client/ticket CRM integration", 
-      "LGPD compliance automation"
-    ],
-    "success_metrics": {
-      "rag_accuracy": "> 85% relevant responses",
-      "api_availability": "> 99.5% uptime",
-      "compliance_coverage": "100% consent tracking"
-    }
+  "summary": {
+    "issue": "CharacterNotInRepertoireError no processamento de documentos",
+    "root_cause": "Falta de tratamento adequado de codificação UTF-8 ao converter bytes do documento para string após parsing com Unstructured API",
+    "resolution": "Implementação de tratamento de codificação UTF-8 em call_unstructured_api, geração de hash e salvamento no banco de dados",
+    "files_modified": ["worker_service/tasks.py"],
+    "validation": "Novo trabalho (ID 10) processado com sucesso, status COMPLETED, dados salvos corretamente em ai.rag_documents_1536"
   },
-  "architectural_decisions": {
-    "service_separation": {
-      "id": "AD-001",
-      "decision": "Strict separation: FastAPI for rapid response, Celery for heavy processing",
-      "rationale": "Maintain API responsiveness under load",
-      "implementation_pattern": "Producer-Consumer with Redis queue",
-      "files_affected": ["ingestion_service/main.py", "worker_service/tasks.py"],
-      "validation_criteria": "API response < 200ms, worker handles 100+ docs/hour",
-      "status": "IMPLEMENTED_AND_VALIDATED"
-    },
-    "data_model_governance": {
-      "id": "AD-002", 
-      "decision": "Single Source of Truth: core/models.py for all ORM definitions",
-      "rationale": "Prevent schema drift and model inconsistencies",
-      "enforcement_rules": [
-        "NO model definitions outside core/models.py",
-        "Pydantic schemas derive from ORM models",
-        "All DB changes via Alembic migrations"
-      ],
-      "files_affected": ["core/models.py"],
-      "status": "IMPLEMENTED_AND_VALIDATED"
-    },
-    "schema_organization": {
-      "id": "AD-003",
-      "decision": "Service-specific Pydantic schemas in respective service modules",
-      "rationale": "Encapsulation and service autonomy",
-      "pattern": "ingestion_service/schemas.py, worker_service/schemas.py",
-      "files_affected": ["*/schemas.py"],
-      "status": "IMPLEMENTED_AND_VALIDATED"
-    },
-    "migration_strategy": {
-      "id": "AD-004",
-      "decision": "Alembic-only for production deployments, eliminate init_db.py create_all",
-      "rationale": "Controlled, versioned, reversible schema changes",
-      "required_packages": ["alembic", "alembic-postgresql-enum"],
-      "files_affected": ["alembic/env.py", "alembic.ini", "requirements.txt"],
-      "status": "IMPLEMENTED_AND_VALIDATED"
-    }
-  },
-  "critical_failure_patterns": {
-    "sqlalchemy_interface_error": {
-      "id": "PATTERN-001",
-      "error_signature": "sqlalchemy.exc.InterfaceError: another operation is in progress",
-      "root_cause_analysis": {
-        "primary": "Conflicting asyncio.run() with global connection pools",
-        "secondary": "Celery worker thread model incompatibility",
-        "context": "SQLAlchemy async sessions in Celery context"
-      },
-      "proven_solution": {
-        "approach": "Engine-per-task pattern with proper disposal",
-        "implementation": [
-          "Create local async_engine in each task",
-          "Use dedicated AsyncSession per operation", 
-          "ALWAYS call engine.dispose() in finally block",
-          "Avoid global connection pools in worker context"
-        ],
-        "code_pattern": "async with AsyncSession(engine) as session: ... finally: await engine.dispose()"
-      },
-      "files_affected": ["worker_service/tasks.py"],
-      "prevention_checklist": [
-        "No global AsyncSessionFactory in workers",
-        "Engine disposal in finally blocks",
-        "Separate engine per heavy task"
-      ]
-    },
-    "enum_type_mismatch": {
-      "id": "PATTERN-002", 
-      "error_signature": "sqlalchemy.exc.DBAPIError: invalid input value for enum",
-      "root_cause_analysis": {
-        "primary": "Python Enum values vs PostgreSQL ENUM type mismatch",
-        "secondary": "SQLAlchemy enum handling with schemas",
-        "context": "Cross-schema enum operations"
-      },
-      "proven_solution": {
-        "orm_configuration": "Enum(IngestionStatus, schema='ai', native_enum=False)",
-        "raw_query_pattern": "CAST(:param AS ai.ingestionstatus)",
-        "validation_rules": [
-          "Always specify schema in Enum definition",
-          "Use native_enum=False for cross-schema compatibility",
-          "Cast parameters in raw SQL operations"
-        ]
-      },
-      "files_affected": ["core/models.py", "worker_service/tasks.py"],
-      "prevention_checklist": [
-        "Schema-aware enum definitions",
-        "Explicit casting in raw queries", 
-        "Test enum operations across schemas"
-      ]
-    },
-    "schema_inheritance_failure": {
-      "id": "PATTERN-003",
-      "error_signature": "sqlalchemy.exc.ProgrammingError: type does not exist", 
-      "root_cause_analysis": {
-        "primary": "Enum schema inheritance from __table_args__ not automatic",
-        "secondary": "PostgreSQL schema resolution order",
-        "context": "Multi-schema database with custom types"
-      },
-      "proven_solution": {
-        "explicit_schema": "Always specify schema='ai' in Enum constructor",
-        "no_inheritance": "Do not rely on __table_args__ schema inheritance",
-        "validation": "Test enum creation in isolation"
-      },
-      "files_affected": ["core/models.py"],
-      "prevention_checklist": [
-        "Explicit schema in all custom types",
-        "Independent type definitions",
-        "Schema-aware testing"
-      ]
-    },
-    "celery_concurrency_incompatibility": {
-      "id": "PATTERN-004",
-      "error_signature": "ValueError: not enough values to unpack (Windows)",
-      "root_cause_analysis": {
-        "primary": "Default prefork pool incompatible with Windows",
-        "secondary": "Process forking limitations on Windows",
-        "context": "Development environment setup"
-      },
-      "proven_solution": {
-        "windows_development": "celery -A worker_service.tasks worker -P solo",
-        "production_linux": "Standard prefork pool acceptable",
-        "testing": "Use solo pool for consistent behavior"
-      },
-      "files_affected": ["(command line configuration)"],
-      "prevention_checklist": [
-        "Platform-specific worker configuration",
-        "Document dev vs prod differences",
-        "Consistent testing environment"
-      ]
-    },
-    "redis_connectivity_context": {
-      "id": "PATTERN-005",
-      "error_signature": "consumer: Cannot connect to redis://redis:6379/0",
-      "root_cause_analysis": {
-        "primary": "Docker service name vs localhost resolution",
-        "secondary": "Development vs containerized environment",
-        "context": "Mixed deployment scenarios"
-      },
-      "proven_solution": {
-        "environment_aware": "Different .env for dev/docker/prod",
-        "dev_config": "localhost:6379 for local development",
-        "docker_config": "redis:6379 for containerized",
-        "validation": "Test connectivity in target environment"
-      },
-      "files_affected": [".env", "core/config.py"],
-      "prevention_checklist": [
-        "Environment-specific configuration",
-        "Connection validation at startup",
-        "Clear documentation for setup"
-      ]
-    }
-  },
-  "performance_insights": {
-    "database_optimization": {
-      "connection_pooling": "Async pool size: 20, max_overflow: 0",
-      "query_optimization": "Use indexes for status and timestamp queries",
-      "vector_search": "HNSW index for embedding similarity"
-    },
-    "celery_optimization": {
-      "prefetch_multiplier": 1,
-      "task_acks_late": true,
-      "worker_max_tasks_per_child": 1000
-    }
-  },
-  "context_validation_rules": {
-    "architectural_consistency": [
-      "Verify service separation boundaries",
-      "Validate async/sync context appropriateness",
-      "Check schema and model alignment"
-    ],
-    "error_prevention": [
-      "Apply learned failure patterns",
-      "Validate environment-specific configurations",
-      "Ensure proper resource disposal"
-    ],
-    "implementation_quality": [
-      "Structured logging with correlation IDs",
-      "Comprehensive error handling",
-      "Performance monitoring points"
+  "technical_details": {
+    "problematic_flow": "bytes (documento binário) -> parsing com Unstructured -> string (com caracteres problemáticos) -> falha no tratamento",
+    "corrected_flow": "bytes (documento binário) -> parsing com Unstructured -> string (com tratamento de codificação UTF-8) -> hash e salvamento no banco",
+    "key_changes": [
+      "Adição de tratamento UTF-8 com errors='replace' na função call_unstructured_api",
+      "Aplicação de codificação UTF-8 segura antes da geração do hash SHA256",
+      "Implementação de tratamento seguro antes do salvamento em RagDocuments1536",
+      "Adição de tratamento de codificação às mensagens de erro"
     ]
-  }
+  },
+  "validation_results": {
+    "job_status": "COMPLETED (ID 10)",
+    "database_entry": "ai.rag_documents_1536 com conteúdo textual correto",
+    "content_verification": "Campo content contém 'Dummy PDF file' e não binário do PDF",
+    "hash_verification": "SHA256 gerado a partir do conteúdo textual"
+  },
+  "lessons_learned": [
+    "O PATTERN-003 (Data Type Mismatch) ocorre quando bytes são tratados como strings sem conversão adequada",
+    "É essencial garantir codificação UTF-8 ao lidar com conteúdo de documentos de diferentes origens",
+    "O tratamento de erros deve incluir mecanismos de sanitização de caracteres especiais"
+  ],
+  "architectural_impact": {
+    "positive": [
+      "Sistema agora processa documentos com caracteres especiais corretamente",
+      "Melhoria na robustez do pipeline de ingestão",
+      "Padrão de tratamento de codificação estabelecido para componentes futuros"
+    ],
+    "considerations": [
+      "Avaliar o desempenho com documentos grandes após tratamento de codificação",
+      "Possível necessidade de tratamento adicional para outros formatos de documentos"
+    ]
+  },
+  "next_steps": [
+    "Monitorar o sistema para garantir que não ocorram mais falhas devido a caracteres especiais",
+    "Considerar melhorias no tratamento de diferentes formatos de documentos",
+    "Avaliar a possibilidade de implementar validação prévia de codificação dos documentos de entrada"
+  ]
 }

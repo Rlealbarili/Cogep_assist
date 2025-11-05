@@ -1183,5 +1183,229 @@ DOCS INICIAL COGEP_ASSIST_PURO
   ]
 }
 
+{
+  "session_id": "COGEP-20251104-100948",
+  "last_step_completed": "Sincronizar os modelos SQLAlchemy (core/models.py) com a estrutura real do banco de dados e 'carimbar' (stamp) o Alembic para refletir o estado atual.",
+  "current_objective": "Implementar o worker (Celery) para processar itens pendentes da 'ai.ingestion_queue' (o 'Consumer').",
+  "architecture_decisions": [
+    "Endpoint de ingestão (`POST /api/v1/ingest`) atua como 'Produtor' (Producer) na arquitetura API/Worker (AD-001), enfileirando tarefas na tabela `ai.ingestion_queue`."
+  ],
+  "open_issues": [
+    "O banco de dados usa `varchar` para colunas de status, apresentando risco de falha de Enum (PATTERN-002). Agendar refatoração para Enums nativos do PG.",
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD e precisa ser atualizada para refletir as tabelas `ingestion_queue` e `rag_documents_1536`."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
 
+{
+  "session_id": "COGEP-20251104-103046",
+  "last_step_completed": "Implementar o endpoint de ingestão (API Layer) para popular 'ai.ingestion_queue'.",
+  "current_objective": "Implementar a API de Retrieval (RAG Query) para buscar documentos de 'ai.rag_documents_1536'.",
+  "architecture_decisions": [
+    "Endpoint de ingestão (`POST /api/v1/ingest`) atua como 'Produtor' (Producer) na arquitetura API/Worker (AD-001), enfileirando tarefas na tabela `ai.ingestion_queue`.",
+    "Implementação do 'Consumer' (AD-001) usando um 'Feeder' (Celery Beat, `SKIP LOCKED`) para reivindicar jobs e um 'Worker' (Celery Task) para processamento pesado, ambos seguindo o padrão 'Engine-per-task' (PATTERN-001)."
+  ],
+  "open_issues": [
+    "O banco de dados usa `varchar` para colunas de status, apresentando risco de falha de Enum (PATTERN-002). Agendar refatoração para Enums nativos do PG.",
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD e precisa ser atualizada para refletir as tabelas `ingestion_queue` e `rag_documents_1536`."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
 
+{
+  "session_id": "COGEP-20251104-104515",
+  "last_step_completed": "Tentativa de validação do endpoint POST /ingest (Falhou com 404).",
+  "current_objective": "Corrigir o erro de roteamento 404 Not Found no 'ingestion_service'.",
+  "architecture_decisions": [
+    "Endpoint de ingestão (`POST /api/v1/ingest`) atua como 'Produtor' (Producer) na arquitetura API/Worker (AD-001), enfileirando tarefas na tabela `ai.ingestion_queue`."
+  ],
+  "open_issues": [
+    "O endpoint POST /ingest está retornando 404 Not Found, provável falha no registro do router (app.include_router).",
+    "O banco de dados usa `varchar` para colunas de status, apresentando risco de falha de Enum (PATTERN-002). Agendar refatoração para Enums nativos do PG.",
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD e precisa ser atualizada para refletir as tabelas `ingestion_queue` e `rag_documents_1536`."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251104-104830",
+  "last_step_completed": "Corrigir e validar o endpoint POST /api/v1/ingest (Producer AD-001).",
+  "current_objective": "Implementar o worker (Celery) para processar itens pendentes da 'ai.ingestion_queue' (o 'Consumer').",
+  "architecture_decisions": [
+    "Endpoint de ingestão (`POST /api/v1/ingest`) atua como 'Produtor' (Producer) na arquitetura API/Worker (AD-001), enfileirando tarefas na tabela `ai.ingestion_queue`.",
+    "Implementação do 'Consumer' (AD-001) usando um 'Feeder' (Celery Beat, `SKIP LOCKED`) para reivindicar jobs e um 'Worker' (Celery Task) para processamento pesado, ambos seguindo o padrão 'Engine-per-task' (PATTERN-001)."
+  ],
+  "open_issues": [
+    "O banco de dados usa `varchar` para colunas de status, apresentando risco de falha de Enum (PATTERN-002). Agendar refatoração para Enums nativos do PG.",
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD e precisa ser atualizada para refletir as tabelas `ingestion_queue` e `rag_documents_1536`."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251104-120500",
+  "last_step_completed": "Validar o pipeline de ingestão E2E (Falhou no Job 8 com 'CharacterNotInRepertoireError').",
+  "current_objective": "Corrigir o PATTERN-003 (Data Type Mismatch) no worker, garantindo que o texto parseado (str) seja salvo, e não o binário (bytes).",
+  "architecture_decisions": [
+    "O `content` na tabela `ai.rag_documents_1536` armazena o *texto parseado* (UTF-8), não o binário original. O `content_sha256` deve ser um hash desse texto parseado."
+  ],
+  "open_issues": [
+    "PATTERN-003 (Data Type Mismatch): O worker está inserindo `bytes` (PDF binário) em colunas `text` (varchar), causando erro de UTF8 (`0x00`).",
+    "O banco de dados usa `varchar` para colunas de status, apresentando risco de falha de Enum (PATTERN-002).",
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251105-160800",
+  "last_step_completed": "Diagnóstico do PATTERN-003 (Data Type Mismatch) no 'worker_service'.",
+  "current_objective": "Corrigir o PATTERN-003 no worker, garantindo que o texto parseado (str) seja salvo, e não o binário (bytes).",
+  "architecture_decisions": [
+    "O `content` na tabela `ai.rag_documents_1536` armazena o *texto parseado* (UTF-8), não o binário original. O `content_sha256` deve ser um hash desse texto parseado."
+  ],
+  "open_issues": [
+    "PATTERN-003 (Data Type Mismatch): O worker está inserindo `bytes` (PDF binário) em colunas `text` (varchar) OU enviando `bytes` para o Unstructured, causando erro.",
+    "O banco de dados usa `varchar` para colunas de status, apresentando risco de falha de Enum (PATTERN-002).",
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251105-162000",
+  "last_step_completed": "Corrigir e validar o pipeline de ingestão E2E (PATTERN-003 resolvido, Job 10 'COMPLETED').",
+  "current_objective": "Implementar a API de Retrieval (RAG Query) para buscar documentos de 'ai.rag_documents_1536'.",
+  "architecture_decisions": [
+    "Implementação do pilar de Retrieval (Busca) do RAG, localizado no 'agent_service' para consultas de baixa latência."
+  ],
+  "open_issues": [
+    "O banco de dados usa `varchar` para colunas de status, apresentando risco de falha de Enum (PATTERN-002). (Débito técnico)",
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD. (Débito técnico)"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251105-162430",
+  "last_step_completed": "Implementar e validar a API de Retrieval (RAG Query) em 'agent_service'.",
+  "current_objective": "Implementar os endpoints da API do CRM Mínimo (LGPD) no 'agent_service' (Clients e Consents).",
+  "architecture_decisions": [
+    "Implementação do pilar de Retrieval (Busca) do RAG, localizado no 'agent_service' para consultas de baixa latência.",
+    "Implementação dos endpoints de CRM/LGPD (Clients e Consents) no 'agent_service' para consumo direto pelo orquestrador do agente."
+  ],
+  "open_issues": [
+    "O banco de dados usa `varchar` para colunas de status, apresentando risco de falha de Enum (PATTERN-002). (Débito técnico)",
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD. (Débito técnico)"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251105-162700",
+  "last_step_completed": "Implementar e validar os endpoints da API do CRM Mínimo (LGPD) no 'agent_service'.",
+  "current_objective": "Implementar o 'Agente Orquestrador' (Webhook EVOAPI) para unificar os fluxos de LGPD e RAG.",
+  "architecture_decisions": [
+    "Implementação dos endpoints de CRM/LGPD (Clients e Consents) no 'agent_service' para consumo direto pelo orquestrador do agente.",
+    "Implementação do 'Agente Principal' (Orquestrador) como um endpoint de webhook no 'agent_service', responsável pelo fluxo de estado (LGPD) e lógica de negócios (RAG + LLM)."
+  ],
+  "open_issues": [
+    "O banco de dados usa `varchar` para colunas de status, apresentando risco de falha de Enum (PATTERN-002). (Débito técnico)",
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD. (Débito técnico)",
+    "A latência da chamada ao LLM no webhook pode exigir o uso de BackgroundTasks se a EVOAPI tiver timeouts curtos."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251105-163500",
+  "last_step_completed": "Implementar o 'Agente Orquestrador' (Webhook EVOAPI) para unificar os fluxos de LGPD e RAG.",
+  "current_objective": "Validar o fluxo RAG+LLM E2E através do webhook para um usuário com consentimento LGPD.",
+  "architecture_decisions": [
+    "Implementação do 'Agente Principal' (Orquestrador) como um endpoint de webhook no 'agent_service', responsável pelo fluxo de estado (LGPD) e lógica de negócios (RAG + LLM).",
+    "Confirmação do uso de BackgroundTasks no webhook do orquestrador para lidar com a latência do LLM (OpenAI) e evitar timeouts da API (EVOAPI)."
+  ],
+  "open_issues": [
+    "O banco de dados usa `varchar` para colunas de status, apresentando risco de falha de Enum (PATTERN-002). (Débito técnico)",
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD. (Débito técnico)"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251105-163900",
+  "last_step_completed": "Validar o fluxo RAG+LLM E2E através do webhook para um usuário com consentimento LGPD.",
+  "current_objective": "Iniciar o Pilar 3 do MVP: Implementar a lógica de 'Registro de clientes/tickets no CRM' no Agente Orquestrador.",
+  "architecture_decisions": [
+    "Implementação do 'Agente Principal' (Orquestrador) como um endpoint de webhook no 'agent_service', responsável pelo fluxo de estado (LGPD) e lógica de negócios (RAG + LLM).",
+    "Confirmação do uso de BackgroundTasks no webhook do orquestrador para lidar com a latência do LLM (OpenAI) e evitar timeouts da API (EVOAPI)."
+  ],
+  "open_issues": [
+    "O banco de dados usa `varchar` para colunas de status, apresentando risco de falha de Enum (PATTERN-002). (Débito técnico)",
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD. (Débito técnico)"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251105-170800",
+  "last_step_completed": "Refatorar o Data Layer para Enums Nativos (resolvendo PATTERN-002) e adicionar a tabela 'crm.tickets'.",
+  "current_objective": "Implementar a lógica de 'Classificação de Intenção' (RAG vs Ticket) no Agente Orquestrador.",
+  "architecture_decisions": [
+    "Resolução do débito técnico PATTERN-002 (Enum Mismatch) através da refatoração para Enums nativos do PG.",
+    "Adição da entidade 'Tickets' ao schema 'crm'.",
+    "Adição de um classificador de intenção (LLM) como o 'roteador' principal dentro do Agente Orquestrador para separar os fluxos de RAG e Tickets."
+  ],
+  "open_issues": [
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD. (Débito técnico)"
+  ],
+  "mvp_focus": [
+    "RAG para perguntas",
+    "Registro de clientes/tickets no CRM",
+    "Conformidade LGPD"
+  ]
+}
