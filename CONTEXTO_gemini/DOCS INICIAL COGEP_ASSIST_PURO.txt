@@ -1409,3 +1409,75 @@ DOCS INICIAL COGEP_ASSIST_PURO
     "Conformidade LGPD"
   ]
 }
+
+{
+  "session_id": "COGEP-20251105-171500",
+  "last_step_completed": "Implementar e validar a lógica de 'Classificação de Intenção' (RAG vs Ticket) no Agente Orquestrador.",
+  "current_objective": "MVP 1.1 Concluído. Sistema em monitoramento operacional. Aguardando definição do próximo ciclo de features (Pós-MVP).",
+  "architecture_decisions": [
+    "Adição de um classificador de intenção (LLM) como o 'roteador' principal dentro do Agente Orquestrador para separar os fluxos de RAG e Tickets.",
+    "O MVP 1.1 (RAG, LGPD, Tickets) está completo e validado."
+  ],
+  "open_issues": [
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD (Débito técnico de documentação)."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas (CONCLUÍDO)",
+    "Registro de clientes/tickets no CRM (CONCLUÍDO)",
+    "Conformidade LGPD (CONCLUÍDO)"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251105-173800",
+  "last_step_completed": "Implementar e validar a lógica de 'Classificação de Intenção' (RAG vs Ticket) no Agente Orquestrador (MVP 1.1 Concluído).",
+  "current_objective": "Implementar o 'PATTERN-005 (Resilient LLM Fallback)' usando Ollama (Qwen3) no 'agent_service', com base nas especificações do arquivo .md.",
+  "architecture_decisions": [
+    "Adição de um classificador de intenção (LLM) como o 'roteador' principal dentro do Agente Orquestrador para separar os fluxos de RAG e Tickets.",
+    "Criação do Padrão 'PATTERN-005 (Resilient LLM Fallback)', abstraindo a lógica de cliente LLM em 'agent_service/llm_client.py'."
+  ],
+  "open_issues": [
+    "A KB 1 (Arquitetura) está dessincronizada com o estado real do BD (Débito técnico de documentação)."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas (CONCLUÍDO)",
+    "Registro de clientes/tickets no CRM (CONCLUÍDO)",
+    "Conformidade LGPD (CONCLUÍDO)"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251106-093900",
+  "last_step_completed": "Implementar e validar o 'PATTERN-005 (Resilient LLM Fallback)' usando Ollama (Qwen3).",
+  "current_objective": "MVP 1.2 (RAG + LGPD + Tickets + Resiliência) CONCLUÍDO. Sistema em monitoramento operacional.",
+  "architecture_decisions": [
+    "Criação do Padrão 'PATTERN-005 (Resilient LLM Fallback)', abstraindo a lógica de cliente LLM em 'agent_service/llm_client.py'.",
+    "O MVP 1.2 (RAG, LGPD, Tickets, Resiliência) está completo e validado."
+  ],
+  "open_issues": [
+    "A KB 1 (Arquitetura) ['project_knowledge_base.json'] está dessincronizada com o estado real do BD (Débito técnico de documentação)."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas (CONCLUÍDO)",
+    "Registro de clientes/tickets no CRM (CONCLUÍDO)",
+    "Conformidade LGPD (CONCLUÍDO)"
+  ]
+}
+
+{
+  "session_id": "COGEP-20251106-094900",
+  "last_step_completed": "Implementar e validar o 'PATTERN-005 (Resilient LLM Fallback)' usando Ollama (Qwen3).",
+  "current_objective": "MVP 1.2 (RAG + LGPD + Tickets + Resiliência) CONCLUÍDO. Sistema em monitoramento operacional.",
+  "architecture_decisions": [
+    "Criação do Padrão 'PATTERN-005 (Resilient LLM Fallback)', abstraindo a lógica de cliente LLM em 'agent_service/llm_client.py'.",
+    "O MVP 1.2 (RAG, LGPD, Tickets, Resiliência) está completo e validado."
+  ],
+  "open_issues": [
+    "A KB 1 (Arquitetura) ['project_knowledge_base.json'] está dessincronizada com o estado real do BD (Débito técnico de documentação)."
+  ],
+  "mvp_focus": [
+    "RAG para perguntas (CONCLUÍDO)",
+    "Registro de clientes/tickets no CRM (CONCLUÍDO)",
+    "Conformidade LGPD (CONCLUÍDO)"
+  ]
+}

@@ -10,6 +10,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:password@loc
 # --- Configurações do OpenAI ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
+# --- Configurações do Ollama (Fallback) ---
+OLLAMA_API_BASE_URL = os.getenv("OLLAMA_API_BASE_URL", "")
+OLLAMA_CHAT_MODEL_NAME = os.getenv("OLLAMA_CHAT_MODEL_NAME", "")
+
 # --- Configurações do Celery ---
 # URL para o Broker (onde as tarefas são enviadas)
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")

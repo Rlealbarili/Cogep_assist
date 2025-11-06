@@ -1,15 +1,16 @@
 from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-import openai
 import httpx
 import os
 import logging
 from typing import List
+import openai
 
 from core.database import get_db
 from core.models import Clients, Consents, RagDocuments1536, Tickets, PyConsentType, PyTicketStatus
 from agent_service.schemas import EvoApiPayload
+from agent_service.llm_client import get_resilient_chat_completion
 from pgvector.sqlalchemy import Vector
 
 # Configuração do logger
@@ -40,26 +41,10 @@ async def get_user_intent(query: str) -> str:
     """
     Classifica a intenção do usuário como 'PERGUNTA_RAG' ou 'PEDIDO_SUPORTE'
     """
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if not openai_api_key:
-        raise Exception("OPENAI_API_KEY não encontrada nas variáveis de ambiente")
-    
-    client = openai.AsyncOpenAI(api_key=openai_api_key)
-    
     system_prompt = "Você é um classificador. A mensagem do usuário é uma PERGUNTA_RAG ou um PEDIDO_SUPORTE? Responda *apenas* com o nome da classe."
     
-    response = await client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": query}
-        ],
-        max_tokens=20,
-        temperature=0.1
-    )
-    
-    intent = response.choices[0].message.content.strip()
-    return intent
+    intent = await get_resilient_chat_completion(system_prompt, query)
+    return intent.strip()
 
 
 async def send_response_to_evoapi(whatsapp_id: str, response_text: str):
@@ -157,25 +142,10 @@ async def process_conversation(payload: EvoApiPayload, session: AsyncSession):
             context_str = "\n\n".join(context_chunks)
             
             # Preparar o prompt para o LLM
-            prompt = f"""Contexto: {context_str}\n\nPergunta: {user_query}\n\nResponda com base no contexto fornecido. Se não encontrar informações relevantes no contexto, diga que não encontrou informações suficientes para responder."""
+            system_prompt = "Você é um assistente útil que responde com base no contexto fornecido."
+            user_prompt = f"""Contexto: {context_str}\n\nPergunta: {user_query}\n\nResponda com base no contexto fornecido. Se não encontrar informações relevantes no contexto, diga que não encontrou informações suficientes para responder."""
             
-            openai_api_key = os.getenv("OPENAI_API_KEY")
-            if not openai_api_key:
-                raise Exception("OPENAI_API_KEY não encontrada nas variáveis de ambiente")
-            
-            client_openai = openai.AsyncOpenAI(api_key=openai_api_key)
-            
-            response = await client_openai.chat.completions.create(
-                model="gpt-4o-mini",  # Usando gpt-4o-mini como especificado
-                messages=[
-                    {"role": "system", "content": "Você é um assistente útil que responde com base no contexto fornecido."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=500,
-                temperature=0.7
-            )
-            
-            llm_response_text = response.choices[0].message.content
+            llm_response_text = await get_resilient_chat_completion(system_prompt, user_prompt)
             response_text = llm_response_text
             
         elif intent == 'PEDIDO_SUPORTE':
