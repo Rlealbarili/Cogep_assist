@@ -1,0 +1,38 @@
+{
+  "EUR/USD": {
+    "BUY": {
+      "rsi_min": 0,
+      "rsi_max": 30,
+      "sentiment_min": 0.3
+    },
+    "SELL": {
+      "rsi_min": 70,
+      "rsi_max": 100,
+      "sentiment_max": -0.3
+    }
+  },
+  "GBP/USD": {
+    "BUY": {
+      "rsi_min": 0,
+      "rsi_max": 30,
+      "sentiment_min": 0.3
+    },
+    "SELL": {
+      "rsi_min": 70,
+      "rsi_max": 100,
+      "sentiment_max": -0.3
+    }
+  },
+  "USD/JPY": {
+    "BUY": {
+      "rsi_min": 0,
+      "rsi_max": 30,
+      "sentiment_min": 0.3
+    },
+    "SELL": {
+      "rsi_min": 70,
+      "rsi_max": 100,
+      "sentiment_max": -0.3
+    }
+  }
+}

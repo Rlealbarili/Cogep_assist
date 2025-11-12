@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import (Column, Integer, String, DateTime, Text, UniqueConstraint, JSON, ForeignKey, Boolean)
+from sqlalchemy import (Column, Integer, String, DateTime, Text, UniqueConstraint, JSON, ForeignKey, Boolean, Float, Numeric)
 from sqlalchemy.orm import declarative_base, relationship
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects import postgresql
@@ -11,7 +11,7 @@ Base = declarative_base()
 
 # Schema definitions
 ai_schema = 'ai'
-crm_schema = 'crm'
+trading_schema = 'trading'
 
 # Definição dos Enums Python
 class PyIngestionStatus(Enum):
@@ -20,20 +20,26 @@ class PyIngestionStatus(Enum):
     COMPLETED = 'COMPLETED'
     FAILED = 'FAILED'
 
-class PyConsentType(Enum):
-    LGPD_V1 = 'LGPD_V1'
-    TERMS_OF_SERVICE = 'TERMS_OF_SERVICE'
+class PyOrderSide(Enum):
+    BUY = 'BUY'
+    SELL = 'SELL'
 
-class PyTicketStatus(Enum):
-    OPEN = 'OPEN'
-    IN_PROGRESS = 'IN_PROGRESS'
-    RESOLVED = 'RESOLVED'
-    CLOSED = 'CLOSED'
+class PyOrderStatus(Enum):
+    PENDING = 'PENDING'
+    FILLED = 'FILLED'
+    PARTIALLY_FILLED = 'PARTIALLY_FILLED'
+    CANCELLED = 'CANCELLED'
+    REJECTED = 'REJECTED'
+
+class PySignalType(Enum):
+    TECHNICAL = 'TECHNICAL'
+    SENTIMENT = 'SENTIMENT'
 
 # Definição dos Enums PG Nativos
 pg_ingestion_status = postgresql.ENUM(PyIngestionStatus, name='ingestionstatus', schema=ai_schema)
-pg_consent_type = postgresql.ENUM(PyConsentType, name='consenttype', schema=crm_schema)
-pg_ticket_status = postgresql.ENUM(PyTicketStatus, name='ticketstatus', schema=crm_schema)
+pg_order_side = postgresql.ENUM(PyOrderSide, name='orderside', schema=trading_schema)
+pg_order_status = postgresql.ENUM(PyOrderStatus, name='orderstatus', schema=trading_schema)
+pg_signal_type = postgresql.ENUM(PySignalType, name='signaltype', schema=trading_schema)
 
 class IngestionQueue(Base):
     __tablename__ = 'ingestion_queue'
@@ -59,40 +65,58 @@ class RagDocuments1536(Base):  # Renamed to match table name exactly
     document_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-class Clients(Base):
-    __tablename__ = 'clients'
-    __table_args__ = {'schema': crm_schema}
+class MarketSignal(Base):
+    """Sinais de mercado (técnicos e sentimento)"""
+    __tablename__ = 'market_signals'
+    __table_args__ = {'schema': trading_schema}
 
     id = Column(Integer, primary_key=True)
-    whatsapp_id = Column(String, nullable=False, unique=True, index=True)
-    name = Column(String)
+    symbol = Column(String, nullable=False, index=True)  # EUR/USD, GBP/USD, etc
+    signal_type = Column(pg_signal_type, nullable=False)  # TECHNICAL ou SENTIMENT
+    signal_data = Column(JSON, nullable=False)  # RSI, MACD, sentiment_score, etc
+    price = Column(Numeric(12, 5))  # Preço no momento do sinal
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+class TradingOrder(Base):
+    """Ordens de trading executadas"""
+    __tablename__ = 'trading_orders'
+    __table_args__ = {'schema': trading_schema}
+
+    id = Column(Integer, primary_key=True)
+    order_id = Column(String, nullable=False, unique=True, index=True)  # ID da exchange
+    symbol = Column(String, nullable=False, index=True)
+    side = Column(pg_order_side, nullable=False)  # BUY ou SELL
+    size = Column(Numeric(12, 8), nullable=False)  # Tamanho da posição
+    price = Column(Numeric(12, 5), nullable=False)  # Preço de execução
+    status = Column(pg_order_status, nullable=False, default=PyOrderStatus.PENDING)
+    strategy = Column(String)  # Nome da estratégia (RSI_SENTIMENT_V1, etc)
+    exchange = Column(String)  # alpaca, oanda, etc
+    paper_trading = Column(Boolean, default=True)
+    execution_metadata = Column(JSON)  # Dados adicionais da execução
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    filled_at = Column(DateTime)
 
-    consents = relationship("Consents", back_populates="client")
-    tickets = relationship("Tickets", back_populates="client")
-
-class Consents(Base):
-    __tablename__ = 'consents'
-    __table_args__ = {'schema': crm_schema}
+class PerformanceMetric(Base):
+    """Métricas de performance da estratégia"""
+    __tablename__ = 'performance_metrics'
+    __table_args__ = {'schema': trading_schema}
 
     id = Column(Integer, primary_key=True)
-    client_id = Column(Integer, ForeignKey('crm.clients.id'), nullable=False)
-    consent_type = Column(pg_consent_type, nullable=False, default=PyConsentType.LGPD_V1)
-    is_given = Column(Boolean, nullable=False, default=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    symbol = Column(String, nullable=False, index=True)
+    strategy = Column(String, nullable=False)
+    metric_date = Column(DateTime, nullable=False, index=True)
 
-    client = relationship("Clients", back_populates="consents")
+    # Métricas de estratégia
+    sharpe_ratio = Column(Numeric(10, 4))
+    max_drawdown = Column(Numeric(10, 4))
+    profit_factor = Column(Numeric(10, 4))
+    win_rate = Column(Numeric(5, 2))
 
-class Tickets(Base):
-    __tablename__ = 'tickets'
-    __table_args__ = {'schema': crm_schema}
+    # Métricas operacionais
+    avg_latency_ms = Column(Numeric(10, 2))
+    avg_slippage = Column(Numeric(10, 5))
 
-    id = Column(Integer, primary_key=True)
-    client_id = Column(Integer, ForeignKey('crm.clients.id'), nullable=False)
-    description = Column(Text, nullable=False)
-    status = Column(pg_ticket_status, nullable=False, default=PyTicketStatus.OPEN)
+    total_trades = Column(Integer)
+    profitable_trades = Column(Integer)
+
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    client = relationship("Clients", back_populates="tickets")

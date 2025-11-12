@@ -23,6 +23,31 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: trading_bot_timescaledb
+    environment:
+      - POSTGRES_DB=${TIMESCALE_DB:-trading_data}
+      - POSTGRES_USER=${TIMESCALE_USER:-trading_user}
+      - POSTGRES_PASSWORD=${TIMESCALE_PASSWORD:-trading_password}
+    ports:
+      - "${TIMESCALE_PORT:-5433}:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: postgres -c shared_preload_libraries=timescaledb
 
 volumes:
   pg_data:
+  timescale_data:

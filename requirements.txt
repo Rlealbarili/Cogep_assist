@@ -20,3 +20,37 @@ tiktoken
 # --- Migrações de Banco de Dados ---
 alembic
 alembic-postgresql-enum
+
+# ============================================
+# TRADING BOT DEPENDENCIES
+# ============================================
+
+# --- Trading Libraries ---
+ccxt>=4.0.0                    # Biblioteca unificada para exchanges
+numpy>=1.24.0                   # Cálculos numéricos para indicadores
+pandas>=2.0.0                   # Manipulação de séries temporais
+ta-lib>=0.4.28                  # Indicadores técnicos (requer TA-Lib C library)
+
+# --- Async Redis (para Pub/Sub) ---
+redis[hiredis]>=5.0.0           # Redis async com hiredis para performance
+
+# --- Time Series Database ---
+influxdb-client>=1.38.0         # Cliente InfluxDB (caso use InfluxDB)
+# psycopg2-binary já incluído acima (para TimescaleDB via PostgreSQL)
+
+# --- Backtesting & Optimization ---
+# vectorbt>=0.26.0              # Descomente quando implementar Fase 3
+# backtrader>=1.9.78            # Alternativa ao VectorBT
+
+# --- Reinforcement Learning (Fase 5) ---
+# finrl>=0.3.6                  # Descomente quando implementar Fase 5
+# stable-baselines3>=2.0.0      # RL algorithms (PPO, A2C, etc)
+# gym>=0.26.0                   # Gym environment para RL
+
+# --- Data Providers ---
+# alpaca-py>=0.9.0              # Cliente oficial Alpaca (alternativa ao ccxt)
+# oandapyV20>=0.7.2             # Cliente oficial OANDA
+
+# --- Monitoring & Observability ---
+prometheus-client>=0.18.0       # Métricas Prometheus
+# grafana-client>=3.5.0         # Descomente se quiser integração programática
