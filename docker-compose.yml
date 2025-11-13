@@ -1,4 +1,5 @@
 services:
+  # PostgreSQL com PGVector para RAG e dados estruturados
   postgres_db:
     image: pgvector/pgvector:pg16
     container_name: cogep_assist_postgres
@@ -17,12 +18,41 @@ services:
       timeout: 5s
       retries: 5
 
+  # TimescaleDB para séries temporais do sistema de trading
+  timescale_db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: cogep_assist_timescale
+    environment:
+      - POSTGRES_DB=${TIMESCALE_DB}
+      - POSTGRES_USER=${TIMESCALE_USER}
+      - POSTGRES_PASSWORD=${TIMESCALE_PASSWORD}
+    ports:
+      - "${TIMESCALE_PORT}:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$TIMESCALE_USER -d $$TIMESCALE_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis para cache, Celery e Pub/Sub
   redis:
     image: redis:7-alpine
     container_name: cogep_assist_redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data:/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   pg_data:
+  timescale_data:
+  redis_data:
